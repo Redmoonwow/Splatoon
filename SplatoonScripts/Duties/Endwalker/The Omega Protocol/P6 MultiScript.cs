@@ -8,11 +8,11 @@ using ECommons.Hooks.ActionEffectTypes;
 using ECommons.ImGuiMethods;
 using ECommons.Schedulers;
 using ECommons.Throttlers;
+using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using ImGuiNET;
 using Splatoon.SplatoonScripting;
-using Splatoon.Structures;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -193,11 +193,11 @@ internal unsafe class P6_MultiScript :SplatoonScript
 
     public override void OnStartingCast(uint source, uint castId)
     {
-        if (castId == CastID.CosmoArrow)
+        if(castId == CastID.CosmoArrow)
         {
-            if (_targetableNpc == null)
+            if(_targetableNpc == null)
             {
-                if (source.GetObject() is not IBattleNpc npc || npc == null)
+                if(source.GetObject() is not IBattleNpc npc || npc == null)
                 {
                     return;
                 }
@@ -205,7 +205,7 @@ internal unsafe class P6_MultiScript :SplatoonScript
                 _targetableNpc = npc;
             }
 
-            if (_isSecondHalf)
+            if(_isSecondHalf)
             {
                 Controller.GetRegisteredElements().Each(x => x.Value.Enabled = false);
                 Controller.GetRegisteredElements().Each(x => x.Value.tether = false);
@@ -215,22 +215,22 @@ internal unsafe class P6_MultiScript :SplatoonScript
                 }, 14000);
             }
         }
-        else if (castId == CastID.CosmoDive)
+        else if(castId == CastID.CosmoDive)
         {
             ChangeGimmick(Gimmick.CosmoDive);
         }
-        else if (castId == CastID.LimiterCut)
+        else if(castId == CastID.LimiterCut)
         {
             ChangeGimmick(Gimmick.LimiterCut);
         }
-        else if (castId == CastID.LimiterCutWaveCannon)
+        else if(castId == CastID.LimiterCutWaveCannon)
         {
-            if (EzThrottler.Throttle("LimiterCutWaveCannon", 500))
+            if(EzThrottler.Throttle("LimiterCutWaveCannon", 500))
             {
                 ++_limiterCutCount;
-                if (_limiterCutCount >= 7)
+                if(_limiterCutCount >= 7)
                 {
-                    if (!_isSecondHalf)
+                    if(!_isSecondHalf)
                     {
                         ChangeGimmick(Gimmick.WaveCannonSpread1);
                     }
@@ -246,23 +246,23 @@ internal unsafe class P6_MultiScript :SplatoonScript
 
             }
         }
-        else if (castId == CastID.WaveCannonStack)
+        else if(castId == CastID.WaveCannonStack)
         {
-            if (_currentGimmick != Gimmick.WaveCannonSpread1 && !_isSecondHalf)
+            if(_currentGimmick != Gimmick.WaveCannonSpread1 && !_isSecondHalf)
             {
                 ChangeGimmick(Gimmick.WaveCannonSpread1);
             }
         }
-        else if (castId == CastID.CosmoMeteor)
+        else if(castId == CastID.CosmoMeteor)
         {
             ChangeGimmick(Gimmick.CosmoMeteor);
         }
-        else if (castId == CastID.MagicNumber)
+        else if(castId == CastID.MagicNumber)
         {
             _deBuffCount = 0;
             ChangeGimmick(Gimmick.MagicNumber);
         }
-        else if (castId == CastID.RunDunamis)
+        else if(castId == CastID.RunDunamis)
         {
             ChangeGimmick(Gimmick.None);
         }
@@ -270,18 +270,18 @@ internal unsafe class P6_MultiScript :SplatoonScript
 
     public override void OnActionEffectEvent(ActionEffectSet set)
     {
-        if (set.Action == null)
+        if(set.Action == null)
             return;
 
-        if (set.Action.RowId == CastID.CosmoDive || set.Action.RowId == CastID.WaveCannonStack)
+        if(set.Action.RowId == CastID.CosmoDive || set.Action.RowId == CastID.WaveCannonStack)
         {
             ChangeGimmick(Gimmick.FlashWind);
         }
-        else if (set.Action.RowId == CastID.WaveCannonSpread)
+        else if(set.Action.RowId == CastID.WaveCannonSpread)
         {
-            if (EzThrottler.Throttle("WaveCannonSpread", 500))
+            if(EzThrottler.Throttle("WaveCannonSpread", 500))
             {
-                if (_currentGimmick == Gimmick.WaveCannonSpread1)
+                if(_currentGimmick == Gimmick.WaveCannonSpread1)
                 {
                     ChangeGimmick(Gimmick.WaveCannonSpread2);
                 }
@@ -292,7 +292,7 @@ internal unsafe class P6_MultiScript :SplatoonScript
                 EzThrottler.Throttle("WaveCannonSpread", 500, true);
             }
         }
-        else if (set.Action.RowId == CastID.BlindFaith)
+        else if(set.Action.RowId == CastID.BlindFaith)
         {
             _isP6Started = true;
         }
@@ -300,7 +300,7 @@ internal unsafe class P6_MultiScript :SplatoonScript
 
     public override void OnVFXSpawn(uint target, string vfxPath)
     {
-        if (target.GetObject() is IPlayerCharacter character &&
+        if(target.GetObject() is IPlayerCharacter character &&
             vfxPath == VfxPath.Flare &&
             _currentGimmick == Gimmick.CosmoMeteor)
         {
@@ -310,12 +310,12 @@ internal unsafe class P6_MultiScript :SplatoonScript
 
     public override void OnUpdate()
     {
-        if (_currentGimmick == Gimmick.None || _targetableNpc == null || _isP6Started == false)
+        if(_currentGimmick == Gimmick.None || _targetableNpc == null || _isP6Started == false)
         {
             return;
         }
 
-        switch (_currentGimmick)
+        switch(_currentGimmick)
         {
             case Gimmick.CosmoDive:
             ShowCosmoDive();
@@ -344,9 +344,9 @@ internal unsafe class P6_MultiScript :SplatoonScript
         }
     }
 
-    public override void OnGainBuffEffect(uint sourceId, IReadOnlyList<RecordedStatus> gainStatusInfos)
+    public override void OnGainBuffEffect(uint sourceId, Status Status)
     {
-        if (gainStatusInfos.Any(x => x.StatusId == BuffID.MagicNumber) && _currentGimmick == Gimmick.MagicNumber)
+        if(Status.StatusId == BuffID.MagicNumber && _currentGimmick == Gimmick.MagicNumber)
         {
             ++_deBuffCount;
         }
@@ -383,12 +383,12 @@ internal unsafe class P6_MultiScript :SplatoonScript
     {
         ImGui.Text("P6 MultiScript Settings");
         ImGui.Text("#Wave Cannon Spread Marker");
-        if (ImGui.BeginCombo("##SpreadPos", ConvertSpreadMarker(C.spreadMarker)))
+        if(ImGui.BeginCombo("##SpreadPos", ConvertSpreadMarker(C.spreadMarker)))
         {
-            for (int i = 0; i < 9; i++)
+            for(int i = 0; i < 9; i++)
             {
                 SpreadMarker marker = (SpreadMarker)i;
-                if (ImGui.Selectable(ConvertSpreadMarker(marker), C.spreadMarker == marker))
+                if(ImGui.Selectable(ConvertSpreadMarker(marker), C.spreadMarker == marker))
                 {
                     C.spreadMarker = marker;
                 }
@@ -396,12 +396,12 @@ internal unsafe class P6_MultiScript :SplatoonScript
         }
 
         ImGui.Text("#Cosmo Dive Spread Marker");
-        if (ImGui.BeginCombo("##CosmoSpreadPos", ConvertSpreadMarker(C.cosmoSpreadMarker)))
+        if(ImGui.BeginCombo("##CosmoSpreadPos", ConvertSpreadMarker(C.cosmoSpreadMarker)))
         {
-            for (int i = 0; i < 9; i++)
+            for(int i = 0; i < 9; i++)
             {
                 SpreadMarker marker = (SpreadMarker)i;
-                if (ImGui.Selectable(ConvertSpreadMarker(marker), C.cosmoSpreadMarker == marker))
+                if(ImGui.Selectable(ConvertSpreadMarker(marker), C.cosmoSpreadMarker == marker))
                 {
                     C.cosmoSpreadMarker = marker;
                 }
@@ -410,25 +410,25 @@ internal unsafe class P6_MultiScript :SplatoonScript
 
         ImGui.Dummy(new Vector2(0, 20));
         ImGui.Text("# LB Reminder");
-        if (ImGui.RadioButton("I'm Use TankLB is first", C.isTankFirst))
+        if(ImGui.RadioButton("I'm Use TankLB is first", C.isTankFirst))
         {
             C.isTankFirst = true;
         }
-        if (ImGui.RadioButton("I'm Use TankLB is Second", !C.isTankFirst))
+        if(ImGui.RadioButton("I'm Use TankLB is Second", !C.isTankFirst))
         {
             C.isTankFirst = false;
         }
 
-        if (ImGui.RadioButton("I'm Use HealerLB is first", C.isHealerFirst))
+        if(ImGui.RadioButton("I'm Use HealerLB is first", C.isHealerFirst))
         {
             C.isHealerFirst = true;
         }
-        if (ImGui.RadioButton("I'm Use HealerLB is Second", !C.isHealerFirst))
+        if(ImGui.RadioButton("I'm Use HealerLB is Second", !C.isHealerFirst))
         {
             C.isHealerFirst = false;
         }
 
-        if (ImGuiEx.CollapsingHeader("Debug"))
+        if(ImGuiEx.CollapsingHeader("Debug"))
         {
             ImGui.Text("Is P6 Started: " + _isP6Started);
             ImGui.Text("Current Gimmick: " + _currentGimmick);
@@ -444,12 +444,12 @@ internal unsafe class P6_MultiScript :SplatoonScript
     #region privateMethods
     private void ChangeGimmick(Gimmick gimmick)
     {
-        if (_isP6Started == false)
+        if(_isP6Started == false)
         {
             return;
         }
 
-        if (gimmick == Gimmick.CosmoDive && _currentGimmick == Gimmick.LimiterCut)
+        if(gimmick == Gimmick.CosmoDive && _currentGimmick == Gimmick.LimiterCut)
         {
             _showElement = false;
             _ = new TickScheduler(() =>
@@ -463,7 +463,7 @@ internal unsafe class P6_MultiScript :SplatoonScript
                 EzThrottler.Reset("SpreadShowDelay");
             }, 2500);
         }
-        else if (_currentGimmick != Gimmick.CosmoDive)
+        else if(_currentGimmick != Gimmick.CosmoDive)
         {
             Controller.GetRegisteredElements().Each(x => x.Value.Enabled = false);
             _showElement = false;
@@ -490,7 +490,7 @@ internal unsafe class P6_MultiScript :SplatoonScript
             }, 3000);
         }
 
-        if (!_isSecondHalf && gimmick == Gimmick.WaveCannonStack)
+        if(!_isSecondHalf && gimmick == Gimmick.WaveCannonStack)
         {
             _isSecondHalf = true;
         }
@@ -499,7 +499,7 @@ internal unsafe class P6_MultiScript :SplatoonScript
     private void ShowCosmoDive()
     {
         // This Gimmick Always Update Element
-        if (_targetableNpc == null || _targetableNpc.TargetObject == null)
+        if(_targetableNpc == null || _targetableNpc.TargetObject == null)
         {
             return;
         }
@@ -508,9 +508,9 @@ internal unsafe class P6_MultiScript :SplatoonScript
         var playerCharacters = FakeParty.Get();
         List<DistanceCheck> distanceCheckList = new List<DistanceCheck>();
 
-        foreach (var character in playerCharacters)
+        foreach(var character in playerCharacters)
         {
-            if (character == null)
+            if(character == null)
             {
                 continue;
             }
@@ -539,16 +539,16 @@ internal unsafe class P6_MultiScript :SplatoonScript
         // This Gimmick Always Update Element
         Controller.GetElementByName("CountReminder").refActorObjectID = Svc.ClientState.LocalPlayer.EntityId;
         Controller.GetElementByName("CountReminder").overlayText = _limiterCutCount.ToString();
-        if (!_showElement)
+        if(!_showElement)
         {
             Controller.GetElementByName("CountReminder").Enabled = true;
         }
-        if (_limiterCutCount >= 6 && !_isSecondHalf)
+        if(_limiterCutCount >= 6 && !_isSecondHalf)
         {
             // Show Spread Position
-            if (!_isSecondHalf && (_prevSpreadMarker != C.spreadMarker || !_showElement))
+            if(!_isSecondHalf && (_prevSpreadMarker != C.spreadMarker || !_showElement))
             {
-                if (_prevSpreadMarker != SpreadMarker.NotUse)
+                if(_prevSpreadMarker != SpreadMarker.NotUse)
                 {
                     Controller.GetElementByName(_prevSpreadMarker.ToString()).tether = false;
                     Controller.GetElementByName(_prevSpreadMarker.ToString()).Enabled = false;
@@ -569,9 +569,9 @@ internal unsafe class P6_MultiScript :SplatoonScript
         var playerCharacters = FakeParty.Get();
         List<DistanceCheck> distanceCheckList = new List<DistanceCheck>();
 
-        foreach (var character in playerCharacters)
+        foreach(var character in playerCharacters)
         {
-            if (character == null)
+            if(character == null)
             {
                 continue;
             }
@@ -587,12 +587,12 @@ internal unsafe class P6_MultiScript :SplatoonScript
 
         // MT
         Controller.GetElementByName("FlashWind1").refActorObjectID = _targetableNpc.TargetObject.EntityId;
-        if (!_showElement)
+        if(!_showElement)
             Controller.GetElementByName("FlashWind1").Enabled = true;
 
         // OT (Farthest Player)
         Controller.GetElementByName("FlashWind2").refActorObjectID = SortedList[0].Player.EntityId;
-        if (!_showElement)
+        if(!_showElement)
             Controller.GetElementByName("FlashWind2").Enabled = true;
 
         _showElement = true;
@@ -603,9 +603,9 @@ internal unsafe class P6_MultiScript :SplatoonScript
         // This Gimmick Always Update Element
         var playerCharacters = FakeParty.Get();
         int i = 1;
-        foreach (var character in playerCharacters)
+        foreach(var character in playerCharacters)
         {
-            if (character == null)
+            if(character == null)
             {
                 continue;
             }
@@ -613,7 +613,7 @@ internal unsafe class P6_MultiScript :SplatoonScript
             Controller.GetElementByName($"WaveCannonSpreadStack{i}").SetRefPosition(_targetableNpc.Position);
             Controller.GetElementByName($"WaveCannonSpreadStack{i}").SetOffPosition(character.Position);
 
-            if (!_showElement)
+            if(!_showElement)
             {
                 Controller.GetElementByName($"WaveCannonSpreadStack{i}").Enabled = true;
             }
@@ -622,9 +622,9 @@ internal unsafe class P6_MultiScript :SplatoonScript
         }
 
         // Show Spread Position
-        if (!_isSecondHalf && (_prevSpreadMarker != C.spreadMarker || !_showElement))
+        if(!_isSecondHalf && (_prevSpreadMarker != C.spreadMarker || !_showElement))
         {
-            if (_prevSpreadMarker != SpreadMarker.NotUse)
+            if(_prevSpreadMarker != SpreadMarker.NotUse)
             {
                 Controller.GetElementByName(_prevSpreadMarker.ToString()).tether = false;
                 Controller.GetElementByName(_prevSpreadMarker.ToString()).Enabled = false;
@@ -645,9 +645,9 @@ internal unsafe class P6_MultiScript :SplatoonScript
         var playerCharacters = FakeParty.Get();
         List<DistanceCheck> distanceCheckList = new List<DistanceCheck>();
 
-        foreach (var character in playerCharacters)
+        foreach(var character in playerCharacters)
         {
-            if (character == null)
+            if(character == null)
             {
                 continue;
             }
@@ -665,7 +665,7 @@ internal unsafe class P6_MultiScript :SplatoonScript
 
         Controller.GetElementByName("WaveCannonSpreadStack1").SetRefPosition(_targetableNpc.Position);
         Controller.GetElementByName("WaveCannonSpreadStack1").SetOffPosition(extendPos);
-        if (!_showElement)
+        if(!_showElement)
         {
             Controller.GetElementByName("WaveCannonSpreadStack1").Enabled = true;
             _showElement = true;
@@ -676,16 +676,16 @@ internal unsafe class P6_MultiScript :SplatoonScript
     {
         var playerCharacters = FakeParty.Get();
         int i = 1;
-        foreach (var character in playerCharacters)
+        foreach(var character in playerCharacters)
         {
-            if (character == null)
+            if(character == null)
             {
                 continue;
             }
 
             Controller.GetElementByName($"CosmoMeteorRange{i}").refActorObjectID = character.EntityId;
 
-            if (!_showElement)
+            if(!_showElement)
             {
                 Controller.GetElementByName($"CosmoMeteorRange{i}").Enabled = true;
             }
@@ -694,11 +694,11 @@ internal unsafe class P6_MultiScript :SplatoonScript
         }
 
         // Show Spread Position
-        if (C.cosmoSpreadMarker != SpreadMarker.NotUse)
+        if(C.cosmoSpreadMarker != SpreadMarker.NotUse)
         {
-            if (_prevCosmoSpreadMarker != C.cosmoSpreadMarker || !_showElement)
+            if(_prevCosmoSpreadMarker != C.cosmoSpreadMarker || !_showElement)
             {
-                if (_prevCosmoSpreadMarker != SpreadMarker.NotUse)
+                if(_prevCosmoSpreadMarker != SpreadMarker.NotUse)
                 {
                     Controller.GetElementByName(_prevCosmoSpreadMarker.ToString()).tether = false;
                     Controller.GetElementByName(_prevCosmoSpreadMarker.ToString()).Enabled = false;
@@ -719,9 +719,9 @@ internal unsafe class P6_MultiScript :SplatoonScript
     private void ShowMagicNumber()
     {
         Class myJob = GetClassJobByEntityId(Svc.ClientState.LocalPlayer.EntityId);
-        if (tank.Contains(myJob))
+        if(tank.Contains(myJob))
         {
-            if (_targetableNpc.IsCasting() == true)
+            if(_targetableNpc.IsCasting() == true)
             {
                 Controller.GetElementByName("LBReminder").overlayText = "LB";
                 Controller.GetElementByName("LBReminder").Enabled = true;
@@ -731,9 +731,9 @@ internal unsafe class P6_MultiScript :SplatoonScript
                 Controller.GetElementByName("LBReminder").Enabled = false;
             }
         }
-        else if (healer.Contains(myJob))
+        else if(healer.Contains(myJob))
         {
-            if (_deBuffCount >= 8)
+            if(_deBuffCount >= 8)
             {
                 Controller.GetElementByName("LBReminder").overlayText = "LB";
                 Controller.GetElementByName("LBReminder").Enabled = true;
@@ -747,7 +747,7 @@ internal unsafe class P6_MultiScript :SplatoonScript
 
     private string ConvertSpreadMarker(SpreadMarker marker)
     {
-        switch (marker)
+        switch(marker)
         {
             case SpreadMarker.North:
             return "North";
@@ -797,7 +797,7 @@ internal unsafe class P6_MultiScript :SplatoonScript
         Vector3 extendedPos = currentPos + (direction * extensionLength);
 
         // If limit is null, return the extended position without clamping
-        if (!limit.HasValue)
+        if(!limit.HasValue)
         {
             return extendedPos;
         }
@@ -806,7 +806,7 @@ internal unsafe class P6_MultiScript :SplatoonScript
         float distanceFromCenter = Vector3.Distance(center, extendedPos);
 
         // If the extended position exceeds the limit, clamp it within the limit
-        if (distanceFromCenter > limit.Value)
+        if(distanceFromCenter > limit.Value)
         {
             return center + (direction * limit.Value);
         }

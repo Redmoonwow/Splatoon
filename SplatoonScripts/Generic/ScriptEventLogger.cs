@@ -5,9 +5,9 @@ using ECommons.Configuration;
 using ECommons.Hooks;
 using ECommons.Hooks.ActionEffectTypes;
 using ECommons.Logging;
+using FFXIVClientStructs.FFXIV.Client.Game;
 using ImGuiNET;
 using Splatoon.SplatoonScripting;
-using Splatoon.Structures;
 using System.Collections.Generic;
 
 namespace SplatoonScriptsOfficial.Generic;
@@ -211,26 +211,20 @@ internal class ScriptEventLogger :SplatoonScript
             PluginLog.Information($"OnActionEffectEvent: {set.Action.Name}({set.Action.RowId}) - Source: {set.Source.Name}{set.Source.Position}(GID: {set.Source.GameObjectId} DID: {set.Source.DataId}) - Target: {set.Target.Name}{set.Target.Position}(GID: {set.Target.GameObjectId} DID: {set.Target.DataId})");
     }
 
-    public override void OnGainBuffEffect(uint sourceId, IReadOnlyList<RecordedStatus> gainStatusInfos)
+    public override void OnGainBuffEffect(uint sourceId, Status Status)
     {
         if(!Conf.FilterOnGainBuffEffect)
             return;
         var gameObject = sourceId.GetObject();
-        foreach(var status in gainStatusInfos)
-        {
-            PluginLog.Information($"OnGainBuffEffect: [{gameObject.Name}({sourceId})] {status.ToStringWithName()}");
-        }
+        PluginLog.Information($"OnGainBuffEffect: [{gameObject.Name}({sourceId})] {Status.StatusId}:{Status.Param}");
     }
 
-    public override void OnRemoveBuffEffect(uint sourceId, IReadOnlyList<RecordedStatus> removeStatusInfos)
+    public override void OnRemoveBuffEffect(uint sourceId, Status Status)
     {
         if(!Conf.FilterOnRemoveBuffEffect)
             return;
         var gameObject = sourceId.GetObject();
-        foreach(var status in removeStatusInfos)
-        {
-            PluginLog.Information($"OnRemoveBuffEffect: [{gameObject.Name}({sourceId})] {status.ToStringWithName()}");
-        }
+        PluginLog.Information($"OnRemoveBuffEffect: [{gameObject.Name}({sourceId})] {Status.StatusId} : {Status.Param}");
     }
 
     public override void OnReset()
