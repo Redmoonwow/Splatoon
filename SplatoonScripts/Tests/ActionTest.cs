@@ -1,440 +1,171 @@
-﻿using ECommons;
-using ECommons.ExcelServices;
-using ECommons.GameHelpers;
+﻿using ECommons.Automation.NeoTaskManager;
+using ECommons.DalamudServices;
+using ECommons.ImGuiMethods;
 using ECommons.Logging;
-using ECommons.MathHelpers;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using ImGuiNET;
+using Lumina.Excel;
+using Lumina.Excel.Sheets;
 using Splatoon.SplatoonScripting;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Numerics;
 
 namespace SplatoonScriptsOfficial.Tests;
-internal unsafe class ActionTest : SplatoonScript
+internal unsafe class ActionTest :SplatoonScript
 {
-    public override HashSet<uint> ValidTerritories => [];
-    private ActionManager* actionManager = ActionManager.Instance();
+    public override HashSet<uint> ValidTerritories => new();
+    private ActionManager* _actionManager = ActionManager.Instance();
+    private TaskManager _taskManager = new();
+    private ActionType _usedActionType = ActionType.Action;
+    private uint _setActionId = 0u;
+    private long _timeoutTick = 0u;
+
     public override void OnSettingsDraw()
     {
-        ImGui.Text($"AL: {actionManager->AnimationLock}");
-        ImGui.Text($"ActionQueue: {actionManager->ActionQueued} {actionManager->QueuedActionId} {actionManager->QueuedActionType}");
-        ImGui.Text($"ActionStatus 7548: {actionManager->IsRecastTimerActive(ActionType.Action, 7548u)}");
-        ImGui.Text($"ActionStatus 3: {actionManager->IsRecastTimerActive(ActionType.Action, 3u)}");
-        if(ImGui.Button($"Try Arm") && actionManager->AnimationLock == 0 && !actionManager->IsRecastTimerActive(ActionType.Action, 7548u))
+        ImGui.Text($"AL: {_actionManager->AnimationLock}");
+        ImGui.Text($"ActionQueue: {_actionManager->ActionQueued} {_actionManager->QueuedActionId} {_actionManager->QueuedActionType}");
+        ImGui.Text("Fire Buffs");
+        fixed (uint* setActionIdPtr = &_setActionId)
         {
-            if(HealerJobs.Contains(Player.Object.GetJob()) ||
-                MagicDpsJobs.Contains(Player.Object.GetJob()))
+            if (ImGui.BeginCombo("##ActionType", "ActionType"))
             {
-                actionManager->UseAction(ActionType.Action, 7559u);
-            }
-            else actionManager->UseAction(ActionType.Action, 7548u);
-        }
-        if(ImGui.Button($"Try Sprint") && actionManager->AnimationLock == 0 && !actionManager->IsRecastTimerActive(ActionType.Action, 3u))
-        {
-            actionManager->UseAction(ActionType.Action, 3u);
-        }
-
-        for(var i = 0; i < 80; i++)
-        {
-            ImGui.Text($"ActionStatus {i}: {actionManager->Cooldowns[i].ActionId} {actionManager->Cooldowns[i].Total}");
-            ImGui.Text($"ActionStatus {i}: {actionManager->Cooldowns[i].IsActive} {actionManager->Cooldowns[i].Elapsed}");
-        }
-    }
-
-    #region API
-    /********************************************************************/
-    /* API                                                              */
-    /********************************************************************/
-    private static readonly Job[] jobOrder =
-    {
-        Job.DRK,
-        Job.WAR,
-        Job.GNB,
-        Job.PLD,
-        Job.WHM,
-        Job.AST,
-        Job.SCH,
-        Job.SGE,
-        Job.DRG,
-        Job.VPR,
-        Job.SAM,
-        Job.MNK,
-        Job.RPR,
-        Job.NIN,
-        Job.BRD,
-        Job.MCH,
-        Job.DNC,
-        Job.RDM,
-        Job.SMN,
-        Job.PCT,
-        Job.BLM,
-    };
-
-    private static readonly Job[] TankJobs = { Job.DRK, Job.WAR, Job.GNB, Job.PLD };
-    private static readonly Job[] HealerJobs = { Job.WHM, Job.AST, Job.SCH, Job.SGE };
-    private static readonly Job[] MeleeDpsJobs = { Job.DRG, Job.VPR, Job.SAM, Job.MNK, Job.RPR, Job.NIN };
-    private static readonly Job[] RangedDpsJobs = { Job.BRD, Job.MCH, Job.DNC };
-    private static readonly Job[] MagicDpsJobs = { Job.RDM, Job.SMN, Job.PCT, Job.BLM };
-    private static readonly Job[] DpsJobs = MeleeDpsJobs.Concat(RangedDpsJobs).Concat(MagicDpsJobs).ToArray();
-    private enum Role
-    {
-        Tank,
-        Healer,
-        MeleeDps,
-        RangedDps,
-        MagicDps
-    }
-
-    public class DirectionCalculator
-    {
-        public enum Direction : int
-        {
-            None = -1,
-            East = 0,
-            SouthEast = 1,
-            South = 2,
-            SouthWest = 3,
-            West = 4,
-            NorthWest = 5,
-            North = 6,
-            NorthEast = 7,
-        }
-
-        public enum LR : int
-        {
-            Left = -1,
-            SameOrOpposite = 0,
-            Right = 1
-        }
-
-        public class DirectionalVector
-        {
-            public Direction Direction { get; }
-            public Vector3 Position { get; }
-
-            public DirectionalVector(Direction direction, Vector3 position)
-            {
-                Direction = direction;
-                Position = position;
-            }
-
-            public override string ToString()
-            {
-                return $"{Direction}: {Position}";
-            }
-        }
-
-        public static int Round45(int value) => (int)(MathF.Round((float)value / 45) * 45);
-        public static Direction GetOppositeDirection(Direction direction) => GetDirectionFromAngle(direction, 180);
-
-        public static Direction DividePoint(Vector3 Position, float Distance, Vector3? Center = null)
-        {
-            // Distance, Centerの値を用いて、８方向のベクトルを生成
-            var directionalVectors = GenerateDirectionalVectors(Distance, Center ?? new Vector3(100, 0, 100));
-
-            // ８方向の内、最も近い方向ベクトルを取得
-            var closestDirection = Direction.North;
-            var closestDistance = float.MaxValue;
-            foreach(var directionalVector in directionalVectors)
-            {
-                var distance = Vector3.Distance(Position, directionalVector.Position);
-                if(distance < closestDistance)
+                int i = 0;
+                foreach (var actionType in Enum.GetValues(typeof(ActionType)))
                 {
-                    closestDistance = distance;
-                    closestDirection = directionalVector.Direction;
+                    ImGui.PushID($"{actionType}{i}");
+                    if (ImGui.Selectable(actionType.ToString(), _usedActionType == (ActionType)actionType))
+                    {
+                        _usedActionType = (ActionType)actionType;
+                    }
+                    ImGui.PopID();
+                    i++;
                 }
+                ImGui.EndCombo();
+            }
+            ImGui.InputScalar("ActionId", ImGuiDataType.U32, (IntPtr)setActionIdPtr);
+        }
+        ImGui.Text($"ActionType: {_usedActionType}");
+        var actionName = GetActionName(_usedActionType, _setActionId);
+        ImGui.Text($"Action: {actionName}");
+        if (ImGui.Button("SetAction"))
+        {
+            if (_setActionId == 0 || _usedActionType == ActionType.None)
+            {
+                DuoLog.Error("SetAction: ActionId or ActionType is not set");
+                return;
             }
 
-            return closestDirection;
-        }
-
-        public static Direction GetDirectionFromAngle(Direction direction, int angle)
-        {
-            if(direction == Direction.None) return Direction.None; // 無効な方向の場合
-
-            // 方向数（8方向: North ~ NorthWest）
-            const int directionCount = 8;
-
-            // 角度を45度単位に丸め、-180～180の範囲に正規化
-            angle = ((Round45(angle) % 360) + 360) % 360; // 正の値に変換して360で正規化
-            if(angle > 180) angle -= 360;
-
-            // 現在の方向のインデックス
-            var currentIndex = (int)direction;
-
-            // 45度ごとのステップ計算と新しい方向の計算
-            var step = angle / 45;
-            var newIndex = (currentIndex + step + directionCount) % directionCount;
-
-            return (Direction)newIndex;
-        }
-
-        public static LR GetTwoPointLeftRight(Direction direction1, Direction direction2)
-        {
-            // 不正な方向の場合（None）
-            if(direction1 == Direction.None || direction2 == Direction.None)
-                return LR.SameOrOpposite;
-
-            // 方向数（8つ: North ~ NorthWest）
-            var directionCount = 8;
-
-            // 差分を循環的に計算
-            var difference = ((int)direction2 - (int)direction1 + directionCount) % directionCount;
-
-            // LRを直接返す
-            return difference == 0 || difference == directionCount / 2
-                ? LR.SameOrOpposite
-                : (difference < directionCount / 2 ? LR.Right : LR.Left);
-        }
-
-        public static int GetTwoPointAngle(Direction direction1, Direction direction2)
-        {
-            // 不正な方向を考慮
-            if(direction1 == Direction.None || direction2 == Direction.None)
-                return 0;
-
-            // enum の値を数値として扱い、環状の差分を計算
-            var diff = ((int)direction2 - (int)direction1 + 8) % 8;
-
-            // 差分から角度を計算
-            return diff <= 4 ? diff * 45 : (diff - 8) * 45;
-        }
-
-        public static float GetAngle(Direction direction)
-        {
-            if(direction == Direction.None) return 0; // 無効な方向の場合
-
-            // 45度単位で計算し、0度から始まる時計回りの角度を返す
-            return (int)direction * 45 % 360;
-        }
-
-        private static List<DirectionalVector> GenerateDirectionalVectors(float distance, Vector3? center = null)
-        {
-            var directionalVectors = new List<DirectionalVector>();
-
-            // 各方向のオフセット計算
-            foreach(Direction direction in Enum.GetValues(typeof(Direction)))
-            {
-                if(direction == Direction.None) continue; // Noneはスキップ
-
-                var offset = direction switch
+            _taskManager.Enqueue(() =>
                 {
-                    Direction.North => new Vector3(0, 0, -1),
-                    Direction.NorthEast => Vector3.Normalize(new Vector3(1, 0, -1)),
-                    Direction.East => new Vector3(1, 0, 0),
-                    Direction.SouthEast => Vector3.Normalize(new Vector3(1, 0, 1)),
-                    Direction.South => new Vector3(0, 0, 1),
-                    Direction.SouthWest => Vector3.Normalize(new Vector3(-1, 0, 1)),
-                    Direction.West => new Vector3(-1, 0, 0),
-                    Direction.NorthWest => Vector3.Normalize(new Vector3(-1, 0, -1)),
-                    _ => Vector3.Zero
-                };
-
-                // 距離を適用して座標を計算
-                var position = (center ?? new Vector3(100, 0, 100)) + (offset * distance);
-
-                // リストに追加
-                directionalVectors.Add(new DirectionalVector(direction, position));
-            }
-
-            return directionalVectors;
-        }
-    }
-
-    public class ClockDirectionCalculator
-    {
-        private DirectionCalculator.Direction _12ClockDirection = DirectionCalculator.Direction.None;
-        public bool isValid => _12ClockDirection != DirectionCalculator.Direction.None;
-        public DirectionCalculator.Direction Get12ClockDirection() => _12ClockDirection;
-
-        public ClockDirectionCalculator(DirectionCalculator.Direction direction)
-        {
-            _12ClockDirection = direction;
+                    long timeoutTick = Environment.TickCount64 + 3000;
+                    var copyid = _setActionId;
+                    var copytype = _usedActionType;
+                    this.UseAction(copytype, copyid, timeoutTick);
+                });
         }
 
-        // _12ClockDirectionを0時方向として、指定時計からの方向を取得
-        public DirectionCalculator.Direction GetDirectionFromClock(int clock)
+        if (ImGuiEx.CollapsingHeader("ActionManager"))
         {
-            if(!isValid)
-                return DirectionCalculator.Direction.None;
+            ImGui.Text($"8:   AnimationLock: {_actionManager->AnimationLock}");
+            ImGui.Text($"12:  CompanionActionCooldown: {_actionManager->CompanionActionCooldown}");
+            ImGui.Text($"16:  BuddyActionCooldown: {_actionManager->BuddyActionCooldown}");
+            ImGui.Text($"20:  PetActionCooldown: {_actionManager->PetActionCooldown}");
+            ImGui.Text($"24:  NumPetActionsOnCooldown: {_actionManager->NumPetActionsOnCooldown}");
+            ImGui.Text($"36:  CastSpellId: {_actionManager->CastSpellId}");
+            ImGui.Text($"40:  CastActionType: {_actionManager->CastActionType}");
+            ImGui.Text($"44:  CastActionId: {_actionManager->CastActionId}");
+            ImGui.Text($"48:  CastTimeElapsed: {_actionManager->CastTimeElapsed}");
+            ImGui.Text($"52:  CastTimeTotal: {_actionManager->CastTimeTotal}");
+            ImGui.Text($"56:  CastTargetId: {_actionManager->CastTargetId}");
+            ImGui.Text($"64:  CastTargetPosition: {_actionManager->CastTargetPosition}");
+            ImGui.Text($"80:  CastRotation: {_actionManager->CastRotation}");
+            ImGui.Text($"96:  Combo: {_actionManager->Combo}");
+            ImGui.Text($"104: ActionQueued: {_actionManager->ActionQueued}");
+            ImGui.Text($"108: QueuedActionType: {_actionManager->QueuedActionType}");
+            ImGui.Text($"112: QueuedActionId: {_actionManager->QueuedActionId}");
+            ImGui.Text($"120: QueuedTargetId: {_actionManager->QueuedTargetId}");
+            ImGui.Text($"128: QueuedExtraParam: {_actionManager->QueuedExtraParam}");
+            ImGui.Text($"132: QueueType: {_actionManager->QueueType}");
+            ImGui.Text($"136: QueuedComboRouteId: {_actionManager->QueuedComboRouteId}");
+            ImGui.Text($"144: AreaTargetingActionId: {_actionManager->AreaTargetingActionId}");
+            ImGui.Text($"148: AreaTargetingActionType: {_actionManager->AreaTargetingActionType}");
+            ImGui.Text($"152: AreaTargetingSpellId: {_actionManager->AreaTargetingSpellId}");
+            ImGui.Text($"160: AreaTargetingExecuteAtObject: {_actionManager->AreaTargetingExecuteAtObject}");
+            ImGui.Text($"176: AreaTargetingVfx1: {new IntPtr(_actionManager->AreaTargetingVfx1):X}");
+            ImGui.Text($"184: AreaTargetingVfx2: {new IntPtr(_actionManager->AreaTargetingVfx2):X}");
+            ImGui.Text($"192: AreaTargetingExecuteAtCursor: {_actionManager->AreaTargetingExecuteAtCursor}");
+            ImGui.Text($"240: BallistaActive: {_actionManager->BallistaActive}");
+            ImGui.Text($"241: BallistaRowId: {_actionManager->BallistaRowId}");
+            ImGui.Text($"256: BallistaOrigin: {_actionManager->BallistaOrigin}");
+            ImGui.Text($"272: BallistaRefAngle: {_actionManager->BallistaRefAngle}");
+            ImGui.Text($"276: BallistaRadius: {_actionManager->BallistaRadius}");
+            ImGui.Text($"280: BallistaEntityId: {_actionManager->BallistaEntityId}");
+            ImGui.Text($"288: LastUsedActionSequence: {_actionManager->LastUsedActionSequence}");
+            ImGui.Text($"290: LastHandledActionSequence: {_actionManager->LastHandledActionSequence}");
+            ImGui.Text($"2024: DistanceToTargetHitbox: {_actionManager->DistanceToTargetHitbox}");
 
-            // 特別ケース: clock = 0 の場合、_12ClockDirection をそのまま返す
-            if(clock == 0)
-                return _12ClockDirection;
-
-            // 12時計位置を8方向にマッピング
-            var clockToDirectionMapping = new Dictionary<int, int>
-        {
-            { 0, 0 },   // Same as _12ClockDirection
-            { 1, 1 }, { 2, 1 },   // Diagonal right up
-            { 3, 2 },             // Right
-            { 4, 3 }, { 5, 3 },   // Diagonal right down
-            { 6, 4 },             // Opposite
-            { 7, -3 }, { 8, -3 }, // Diagonal left down
-            { 9, -2 },            // Left
-            { 10, -1 }, { 11, -1 } // Diagonal left up
-        };
-
-            // 現在の12時方向をインデックスとして取得
-            var baseIndex = (int)_12ClockDirection;
-
-            // 時計位置に基づくステップを取得
-            var step = clockToDirectionMapping[clock];
-
-            // 新しい方向を計算し、範囲を正規化
-            var targetIndex = (baseIndex + step + 8) % 8;
-
-            // 対応する方向を返す
-            return (DirectionCalculator.Direction)targetIndex;
-        }
-
-        public int GetClockFromDirection(DirectionCalculator.Direction direction)
-        {
-            if(!isValid)
-                throw new InvalidOperationException("Invalid state: _12ClockDirection is not set.");
-
-            if(direction == DirectionCalculator.Direction.None)
-                throw new ArgumentException("Direction cannot be None.", nameof(direction));
-
-            // 各方向に対応する最小の clock 値を定義
-            var directionToClockMapping = new Dictionary<int, int>
+            for (int i = 0; i < 80; i++)
             {
-                { 0, 0 },   // Same as _12ClockDirection
-                { 1, 1 },   // Diagonal right up (SouthEast)
-                { 2, 3 },   // Right (South)
-                { 3, 4 },   // Diagonal right down (SouthWest)
-                { 4, 6 },   // Opposite (West)
-                { 5, 7 },   // Diagonal left down (NorthWest)
-                { 6, 9 },   // Left (North)
-                { 7, 10 }   // Diagonal left up (NorthEast)
-            };
-
-            // 現在の12時方向をインデックスとして取得
-            var baseIndex = (int)_12ClockDirection;
-
-            // 指定された方向のインデックス
-            var targetIndex = (int)direction;
-
-            // 差分を計算し、時計方向に正規化
-            var step = (targetIndex - baseIndex + 8) % 8;
-
-            // 該当する clock を取得
-            return directionToClockMapping[step];
+                if (_actionManager->Cooldowns[i].ActionId == 0) continue;
+                ImGuiEx.EzTable(new[]
+                {
+                    new ImGuiEx.EzTableEntry("ActionId", () => ImGui.Text($"{_actionManager->Cooldowns[i].ActionId}")),
+                    new ImGuiEx.EzTableEntry("Total", () => ImGui.Text($"{_actionManager->Cooldowns[i].Total}")),
+                    new ImGuiEx.EzTableEntry("Elapsed", () => ImGui.Text($"{_actionManager->Cooldowns[i].Elapsed}")),
+                    new ImGuiEx.EzTableEntry("IsActive", () => ImGui.Text($"{_actionManager->Cooldowns[i].IsActive}"))
+                });
+            }
         }
-
-        public float GetAngle(int clock) => DirectionCalculator.GetAngle(GetDirectionFromClock(clock));
     }
 
-    private void HideAllElements() => Controller.GetRegisteredElements().Each(x => x.Value.Enabled = false);
-
-    private void ApplyElement(
-        string elementName,
-        DirectionCalculator.Direction direction,
-        float radius = 0f,
-        float elementRadius = 0.3f,
-        bool tether = true)
+    public void UseAction(ActionType actionType, uint actionId, long timeoutTick)
     {
-        var position = new Vector3(100, 0, 100);
-        var angle = DirectionCalculator.GetAngle(direction);
-        position += radius * new Vector3(MathF.Cos(MathF.PI * angle / 180f), 0, MathF.Sin(MathF.PI * angle / 180f));
-        if(Controller.TryGetElementByName(elementName, out var element))
+        var seq = _actionManager->LastUsedActionSequence;
+        if (_actionManager->AnimationLock == 0 &&
+            !_actionManager->IsRecastTimerActive(actionType, actionId))
         {
-            element.Enabled = true;
-            element.radius = elementRadius;
-            element.tether = tether;
-            element.SetRefPosition(position);
+            _actionManager->UseAction(actionType, actionId);
         }
-    }
 
-    private void ApplyElement(
-        string elementName, float angle, float radius = 0f, float elementRadius = 0.3f, bool tether = true)
-    {
-        var position = new Vector3(100, 0, 100);
-        position += radius * new Vector3(MathF.Cos(MathF.PI * angle / 180f), 0, MathF.Sin(MathF.PI * angle / 180f));
-        if(Controller.TryGetElementByName(elementName, out var element))
+        if (actionType is not ActionType.Action) return;
+
+        if (seq == _actionManager->LastUsedActionSequence)
         {
-            element.Enabled = true;
-            element.radius = elementRadius;
-            element.tether = tether;
-            element.SetRefPosition(position);
+            // Timeout
+            if (timeoutTick <= Environment.TickCount64)
+            {
+                DuoLog.Error($"Failed to use action {actionId} of type {actionType}");
+                return;
+            }
+            // Retry
+            else
+            {
+                _taskManager.Enqueue(() =>
+                {
+                    long copytimeoutTick = timeoutTick;
+                    var copyid = actionId;
+                    var copytype = actionType;
+                    this.UseAction(copytype, copyid, copytimeoutTick);
+                });
+            }
         }
     }
 
-    private static float GetCorrectionAngle(Vector3 origin, Vector3 target, float rotation) =>
-            GetCorrectionAngle(MathHelper.ToVector2(origin), MathHelper.ToVector2(target), rotation);
-
-    private static float GetCorrectionAngle(Vector2 origin, Vector2 target, float rotation)
+    private string GetActionName(ActionType actionType, uint actionId)
     {
-        // Calculate the relative angle to the target
-        var direction = target - origin;
-        var relativeAngle = MathF.Atan2(direction.Y, direction.X) * (180 / MathF.PI);
-
-        // Normalize relative angle to 0-360 range
-        relativeAngle = (relativeAngle + 360) % 360;
-
-        // Calculate the correction angle
-        var correctionAngle = (relativeAngle - ConvertRotationRadiansToDegrees(rotation) + 360) % 360;
-
-        // Adjust correction angle to range -180 to 180 for shortest rotation
-        if(correctionAngle > 180)
-            correctionAngle -= 360;
-
-        return correctionAngle;
-    }
-
-    private static float ConvertRotationRadiansToDegrees(float radians)
-    {
-        // Convert radians to degrees with coordinate system adjustment
-        var degrees = ((-radians * (180 / MathF.PI)) + 180) % 360;
-
-        // Ensure the result is within the 0° to 360° range
-        return degrees < 0 ? degrees + 360 : degrees;
-    }
-
-    private static float ConvertDegreesToRotationRadians(float degrees)
-    {
-        // Convert degrees to radians with coordinate system adjustment
-        var radians = -(degrees - 180) * (MathF.PI / 180);
-
-        // Normalize the result to the range -π to π
-        radians = ((radians + MathF.PI) % (2 * MathF.PI)) - MathF.PI;
-
-        return radians;
-    }
-
-    public static Vector3 GetExtendedAndClampedPosition(
-        Vector3 center, Vector3 currentPos, float extensionLength, float? limit)
-    {
-        // Calculate the normalized direction vector from the center to the current position
-        var direction = Vector3.Normalize(currentPos - center);
-
-        // Extend the position by the specified length
-        var extendedPos = currentPos + (direction * extensionLength);
-
-        // If limit is null, return the extended position without clamping
-        if(!limit.HasValue)
+        return actionType switch
         {
-            return extendedPos;
-        }
-
-        // Calculate the distance from the center to the extended position
-        var distanceFromCenter = Vector3.Distance(center, extendedPos);
-
-        // If the extended position exceeds the limit, clamp it within the limit
-        if(distanceFromCenter > limit.Value)
-        {
-            return center + (direction * limit.Value);
-        }
-
-        // If within the limit, return the extended position as is
-        return extendedPos;
+            ActionType.Action => GetName<Lumina.Excel.Sheets.Action>(actionId, row => row.Name.ToString()),
+            ActionType.Item => GetName<Item>(actionId, row => row.Name.ToString()),
+            ActionType.GeneralAction => GetName<GeneralAction>(actionId, row => row.Name.ToString()),
+            ActionType.MainCommand => GetName<MainCommand>(actionId, row => row.Name.ToString()),
+            _ => "",
+        };
     }
 
-    public static void ExceptionReturn(string message)
+    private string GetName<T>(uint id, Func<T, string> nameSelector) where T : struct, IExcelRow<T>
     {
-        PluginLog.Error(message);
+        var row = Svc.Data.GetExcelSheet<T>()?.GetRowOrDefault(id);
+        return row.HasValue ? nameSelector(row.Value) : "";
     }
-    #endregion
 }

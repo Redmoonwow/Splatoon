@@ -2,17 +2,13 @@
 using Dalamud.Game;
 using Dalamud.Interface.Colors;
 using ECommons;
-using ECommons.Configuration;
 using ECommons.Hooks;
 using ECommons.Hooks.ActionEffectTypes;
 using ECommons.LanguageHelpers;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Newtonsoft.Json;
-using Reloaded.Hooks.Definitions.Structs;
 using Splatoon.Gui.Scripting;
 using System.Diagnostics.CodeAnalysis;
-using static Dalamud.Interface.Utility.Raii.ImRaii;
 
 
 namespace Splatoon.SplatoonScripting;
@@ -250,23 +246,23 @@ public abstract class SplatoonScript
     {
         ImGuiEx.LineCentered(() =>
         {
-            if(ImGuiEx.IconButtonWithText(FontAwesomeIcon.Plus, "Add new configuration".Loc()))
+            if (ImGuiEx.IconButtonWithText(FontAwesomeIcon.Plus, "Add new configuration".Loc()))
             {
                 var newKey = InternalData.GetFreeConfigurationKey();
                 P.Config.ScriptConfigurationNames.GetOrCreate(InternalData.FullName)[newKey] = "New configuration".Loc();
             }
             ImGui.SameLine();
-            if(ImGuiEx.IconButtonWithText(FontAwesomeIcon.Paste, "Paste from clipboard".Loc()))
+            if (ImGuiEx.IconButtonWithText(FontAwesomeIcon.Paste, "Paste from clipboard".Loc()))
             {
                 try
                 {
                     var m = JsonConvert.DeserializeObject<ExportedScriptConfiguration>(Paste()!) ?? throw new NullReferenceException();
-                    if(!ApplyExportedConfiguration(m, out var error))
+                    if (!ApplyExportedConfiguration(m, out var error))
                     {
                         Notify.Error(error);
                     }
                 }
-                catch(Exception e)
+                catch (Exception e)
                 {
                     e.Log();
                     Notify.Error(e.Message);
@@ -274,7 +270,7 @@ public abstract class SplatoonScript
             }
         });
         var current = InternalData.CurrentConfigurationKey;
-        if(ImGui.BeginTable("ConfTable", 2, ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.Borders))
+        if (ImGui.BeginTable("ConfTable", 2, ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.Borders))
         {
             ImGui.TableSetupColumn("Name".Loc(), ImGuiTableColumnFlags.WidthStretch);
             ImGui.TableSetupColumn("##control");
@@ -283,67 +279,67 @@ public abstract class SplatoonScript
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
             ImGuiEx.TextV(current == "" ? ImGuiColors.ParsedGreen : null, $"Default configuration".Loc());
-            if(ImGuiEx.HoveredAndClicked("This is the default configuration which can not be removed. Click to load/reload it.".Loc()))
+            if (ImGuiEx.HoveredAndClicked("This is the default configuration which can not be removed. Click to load/reload it.".Loc()))
             {
                 ApplyDefaultConfiguration();
             }
             ImGui.TableNextColumn();
 
-            if(ImGuiEx.IconButton(FontAwesomeIcon.Copy))
+            if (ImGuiEx.IconButton(FontAwesomeIcon.Copy))
             {
                 CopyConfigurationToClipboard("");
             }
             ImGuiEx.Tooltip("Copy this configuration to clipboard".Loc());
             ImGui.SameLine(0, 1);
-            if(ImGuiEx.IconButton(FontAwesomeIcon.ProjectDiagram))
+            if (ImGuiEx.IconButton(FontAwesomeIcon.ProjectDiagram))
             {
                 DuplicateConfiguration("");
             }
             ImGuiEx.Tooltip("Duplicate this configuration".Loc());
-            if(TryGetAvailableConfigurations(out var confList))
+            if (TryGetAvailableConfigurations(out var confList))
             {
-                foreach(var confKey in confList.Keys.ToArray())
+                foreach (var confKey in confList.Keys.ToArray())
                 {
                     var confValue = confList[confKey];
                     ImGui.PushID(confKey);
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
                     ImGuiEx.TextV(current == confKey ? ImGuiColors.ParsedGreen : null, confValue);
-                    if(ImGuiEx.HoveredAndClicked("Click to apply this configuration and reload the script.".Loc()))
+                    if (ImGuiEx.HoveredAndClicked("Click to apply this configuration and reload the script.".Loc()))
                     {
                         ApplyConfiguration(confKey);
                     }
                     ImGui.TableNextColumn();
-                    if(ImGuiEx.IconButton(FontAwesomeIcon.Copy))
+                    if (ImGuiEx.IconButton(FontAwesomeIcon.Copy))
                     {
                         CopyConfigurationToClipboard(confKey);
                     }
                     ImGuiEx.Tooltip("Copy this configuration to clipboard".Loc());
                     ImGui.SameLine(0, 1);
-                    if(ImGuiEx.IconButton(FontAwesomeIcon.ProjectDiagram))
+                    if (ImGuiEx.IconButton(FontAwesomeIcon.ProjectDiagram))
                     {
                         DuplicateConfiguration(confKey);
                     }
                     ImGuiEx.Tooltip("Duplicate this configuration".Loc());
                     ImGui.SameLine(0, 1);
-                    if(ImGuiEx.IconButton(FontAwesomeIcon.Edit))
+                    if (ImGuiEx.IconButton(FontAwesomeIcon.Edit))
                     {
                         ImGui.OpenPopup($"EditConf");
                     }
                     ImGuiEx.Tooltip("Rename".Loc());
-                    if(ImGui.BeginPopup($"EditConf"))
+                    if (ImGui.BeginPopup($"EditConf"))
                     {
                         ImGuiEx.Text($"Please name your configuration".Loc());
                         ImGui.SetNextItemWidth(250f);
                         var name = confValue;
-                        if(ImGui.InputText("##editval", ref name, 100))
+                        if (ImGui.InputText("##editval", ref name, 100))
                         {
                             confList[confKey] = name;
                         }
                         ImGui.EndPopup();
                     }
                     ImGui.SameLine(0, 1);
-                    if(ImGuiEx.IconButton(FontAwesomeIcon.Trash, enabled: ImGuiEx.Ctrl))
+                    if (ImGuiEx.IconButton(FontAwesomeIcon.Trash, enabled: ImGuiEx.Ctrl))
                     {
                         new TickScheduler(() =>
                         {
@@ -352,13 +348,13 @@ public abstract class SplatoonScript
                             {
                                 DeleteFileToRecycleBin(InternalData.GetConfigPathForConfigurationKey(confKey));
                             }
-                            catch(Exception e) { e.Log(); }
+                            catch (Exception e) { e.Log(); }
                             try
                             {
                                 DeleteFileToRecycleBin(InternalData.GetOverridesPathForConfigurationKey(confKey));
                             }
-                            catch(Exception e) { e.Log(); }
-                            if(InternalData.CurrentConfigurationKey == confKey)
+                            catch (Exception e) { e.Log(); }
+                            if (InternalData.CurrentConfigurationKey == confKey)
                             {
                                 ApplyDefaultConfiguration();
                             }
@@ -378,7 +374,7 @@ public abstract class SplatoonScript
         {
             try
             {
-                if(!TryGetAvailableConfigurations(out var confList))
+                if (!TryGetAvailableConfigurations(out var confList))
                 {
                     confList = [];
                 }
@@ -386,16 +382,16 @@ public abstract class SplatoonScript
                 var name = $"Copy of {confList.SafeSelect(confKey) ?? "Default configuration".Loc()}";
                 var name2 = name;
                 var i = 0;
-                while(confList.ContainsValue(name2))
+                while (confList.ContainsValue(name2))
                 {
                     name2 = $"{name} ({++i})";
                 }
-                if(!ApplyExportedConfiguration(m, out var error, name2))
+                if (!ApplyExportedConfiguration(m, out var error, name2))
                 {
                     Notify.Error(error);
                 }
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 e.Log();
                 Notify.Error(e.Message);
@@ -408,7 +404,7 @@ public abstract class SplatoonScript
         try
         {
             var conf = GetExportedConfiguration(confKey);
-            if(conf != null)
+            if (conf != null)
             {
                 Copy(JsonConvert.SerializeObject(conf));
             }
@@ -417,7 +413,7 @@ public abstract class SplatoonScript
                 DuoLog.Error("Failed to copy configuration".Loc());
             }
         }
-        catch(Exception e)
+        catch (Exception e)
         {
             e.LogDuo();
         }
@@ -435,17 +431,17 @@ public abstract class SplatoonScript
                 TargetScriptName = InternalData.FullName,
                 ConfigurationName = Utils.GetScriptConfigurationName(InternalData.FullName, key).NullWhenEmpty() ?? "",
             };
-            if(File.Exists(InternalData.GetConfigPathForConfigurationKey(key)))
+            if (File.Exists(InternalData.GetConfigPathForConfigurationKey(key)))
             {
                 ec.Configuration = Utils.BrotliCompress(File.ReadAllBytes(InternalData.GetConfigPathForConfigurationKey(key)));
             }
-            if(File.Exists(InternalData.GetOverridesPathForConfigurationKey(key)))
+            if (File.Exists(InternalData.GetOverridesPathForConfigurationKey(key)))
             {
                 ec.Overrides = Utils.BrotliCompress(File.ReadAllBytes(InternalData.GetOverridesPathForConfigurationKey(key)));
             }
             return ec;
         }
-        catch(Exception e)
+        catch (Exception e)
         {
             e.Log();
             return null;
@@ -454,37 +450,37 @@ public abstract class SplatoonScript
 
     internal bool ApplyExportedConfiguration(ExportedScriptConfiguration configuration, [NotNullWhen(false)] out string? error, string? nameOverride = null)
     {
-        if(configuration.TargetScriptName != InternalData.FullName)
+        if (configuration.TargetScriptName != InternalData.FullName)
         {
             error = "You are attempting to import configuration for another script. \nCurrent script: ??\nYour configuration is for: ??".Loc(InternalData.FullName, configuration.TargetScriptName);
             return false;
         }
-        if(configuration.ConfigurationName.IsNullOrEmpty()) configuration.ConfigurationName = "Imported configuration".Loc();
-        if(nameOverride != null)
+        if (configuration.ConfigurationName.IsNullOrEmpty()) configuration.ConfigurationName = "Imported configuration".Loc();
+        if (nameOverride != null)
         {
             configuration.ConfigurationName = nameOverride;
         }
         var newKey = InternalData.GetFreeConfigurationKey();
-        if(configuration.Configuration != null)
+        if (configuration.Configuration != null)
         {
             try
             {
                 File.WriteAllBytes(InternalData.GetConfigPathForConfigurationKey(newKey), Utils.BrotliDecompress(configuration.Configuration));
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 error = e.Message;
                 e.Log();
                 return false;
             }
         }
-        if(configuration.Overrides != null)
+        if (configuration.Overrides != null)
         {
             try
             {
                 File.WriteAllBytes(InternalData.GetOverridesPathForConfigurationKey(newKey), Utils.BrotliDecompress(configuration.Overrides));
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 error = e.Message;
                 e.Log();
@@ -510,8 +506,8 @@ public abstract class SplatoonScript
     internal void ApplyDefaultConfiguration(out Action? reloadAction)
     {
         P.Config.ActiveScriptConfigurations.Remove(InternalData.FullName);
-        if(InternalData.ConfigOpen) TabScripting.RequestOpen = InternalData.FullName;
-        if(InternalData.CurrentConfigurationKey != "")
+        if (InternalData.ConfigOpen) TabScripting.RequestOpen = InternalData.FullName;
+        if (InternalData.CurrentConfigurationKey != "")
         {
             reloadAction = () => ScriptingProcessor.ReloadScript(this);
         }
@@ -530,8 +526,8 @@ public abstract class SplatoonScript
     internal void ApplyConfiguration(string confKey, out Action? reloadAction)
     {
         P.Config.ActiveScriptConfigurations[InternalData.FullName] = confKey;
-        if(InternalData.ConfigOpen) TabScripting.RequestOpen = InternalData.FullName;
-        if(InternalData.CurrentConfigurationKey != confKey)
+        if (InternalData.ConfigOpen) TabScripting.RequestOpen = InternalData.FullName;
+        if (InternalData.CurrentConfigurationKey != confKey)
         {
             reloadAction = () => ScriptingProcessor.ReloadScript(this);
         }
@@ -546,22 +542,22 @@ public abstract class SplatoonScript
         try
         {
             ImGuiEx.TextWrapped(ImGuiColors.DalamudRed, $"Non-restricted editing access. Any incorrectly performed changes may cause script to stop working completely. Use reset function if it happens. \n- In general, only edit color, thickness, text, size. \n- If script has it's own color settings, they will be prioritized.\n- Not all script will take whatever you edit here into account.".Loc());
-            if(ImGuiEx.IconButtonWithText(FontAwesomeIcon.Copy, "Export customized settings to clipboard".Loc()))
+            if (ImGuiEx.IconButtonWithText(FontAwesomeIcon.Copy, "Export customized settings to clipboard".Loc()))
             {
                 GenericHelpers.Copy(JsonConvert.SerializeObject(InternalData.Overrides, new JsonSerializerSettings() { DefaultValueHandling = DefaultValueHandling.Populate }));
                 //Notify.Success("Copied to clipboard".Loc());
             }
             ImGui.SameLine();
-            if(ImGuiEx.IconButtonWithText(FontAwesomeIcon.Paste, "Import customized settings from clipboard (hold CTRL+click)".Loc()))
+            if (ImGuiEx.IconButtonWithText(FontAwesomeIcon.Paste, "Import customized settings from clipboard (hold CTRL+click)".Loc()))
             {
-                if(ImGui.GetIO().KeyCtrl)
+                if (ImGui.GetIO().KeyCtrl)
                 {
                     try
                     {
                         var x = JsonConvert.DeserializeObject<OverrideData>(GenericHelpers.Paste()!);
-                        if(x != null)
+                        if (x != null)
                         {
-                            if(ImGui.GetIO().KeyShift || x.Elements.All(z => Controller.GetRegisteredElements().ContainsKey(z.Key)))
+                            if (ImGui.GetIO().KeyShift || x.Elements.All(z => Controller.GetRegisteredElements().ContainsKey(z.Key)))
                             {
                                 InternalData.Overrides = x;
                                 Controller.ApplyOverrides();
@@ -573,7 +569,7 @@ public abstract class SplatoonScript
                             }
                         }
                     }
-                    catch(Exception e)
+                    catch (Exception e)
                     {
                         e.Log();
                         Notify.Error(e.Message);
@@ -581,34 +577,34 @@ public abstract class SplatoonScript
                 }
             }
             ImGui.Checkbox($"Enable unconditional element preview".Loc(), ref InternalData.UnconditionalDraw);
-            if(InternalData.UnconditionalDraw)
+            if (InternalData.UnconditionalDraw)
             {
-                if(ImGui.Button("Preview draw all".Loc()))
+                if (ImGui.Button("Preview draw all".Loc()))
                 {
                     Controller.GetRegisteredElements().Each(x => InternalData.UnconditionalDrawElements.Add(x.Key));
                 }
                 ImGui.SameLine();
-                if(ImGui.Button("Preview draw none".Loc()))
+                if (ImGui.Button("Preview draw none".Loc()))
                 {
                     InternalData.UnconditionalDrawElements.Clear();
                 }
             }
-            foreach(var x in Controller.GetRegisteredElements())
+            foreach (var x in Controller.GetRegisteredElements())
             {
                 ImGui.PushID(x.Value.GUID);
-                if(InternalData.UnconditionalDraw)
+                if (InternalData.UnconditionalDraw)
                 {
                     ImGuiEx.CollectionCheckbox($"Preview draw".Loc(), x.Key, InternalData.UnconditionalDrawElements);
                     ImGui.SameLine();
                 }
-                if(ImGuiEx.IconButtonWithText(FontAwesomeIcon.Copy, "Copy to clipboard".Loc()))
+                if (ImGuiEx.IconButtonWithText(FontAwesomeIcon.Copy, "Copy to clipboard".Loc()))
                 {
                     GenericHelpers.Copy(JsonConvert.SerializeObject(x.Value, new JsonSerializerSettings { DefaultValueHandling = DefaultValueHandling.Ignore }));
                 }
                 ImGui.SameLine();
-                if(ImGuiEx.IconButtonWithText(FontAwesomeIcon.Edit, "Edit".Loc()))
+                if (ImGuiEx.IconButtonWithText(FontAwesomeIcon.Edit, "Edit".Loc()))
                 {
-                    if(!InternalData.Overrides.Elements.ContainsKey(x.Key))
+                    if (!InternalData.Overrides.Elements.ContainsKey(x.Key))
                     {
                         Notify.Info($"Created override for {x.Key}");
                         InternalData.Overrides.Elements[x.Key] = x.Value.JSONClone();
@@ -616,7 +612,7 @@ public abstract class SplatoonScript
                     P.PinnedElementEditWindow.Open(this, x.Key);
                 }
                 ImGui.SameLine();
-                if(InternalData.Overrides.Elements.ContainsKey(x.Key))
+                if (InternalData.Overrides.Elements.ContainsKey(x.Key))
                 {
                     ImGuiEx.CollectionCheckbox("Reset".Loc(), x.Key, InternalData.ElementsResets);
                 }
@@ -624,11 +620,11 @@ public abstract class SplatoonScript
                 ImGuiEx.Text($"[{x.Key}] {x.Value.Name}");
                 ImGui.PopID();
             }
-            if(InternalData.ElementsResets.Count > 0)
+            if (InternalData.ElementsResets.Count > 0)
             {
-                if(ImGuiEx.IconButtonWithText((FontAwesomeIcon)'\uf0e2', "Reset selected elements and reload script".Loc()))
+                if (ImGuiEx.IconButtonWithText((FontAwesomeIcon)'\uf0e2', "Reset selected elements and reload script".Loc()))
                 {
-                    foreach(var x in InternalData.ElementsResets)
+                    foreach (var x in InternalData.ElementsResets)
                     {
                         InternalData.Overrides.Elements.Remove(x);
                     }
@@ -637,7 +633,7 @@ public abstract class SplatoonScript
                 }
             }
         }
-        catch(Exception e)
+        catch (Exception e)
         {
             e.Log();
         }
@@ -647,7 +643,7 @@ public abstract class SplatoonScript
 
     internal bool Enable()
     {
-        if(IsEnabled || IsDisabledByUser || !InternalData.Allowed || InternalData.Blacklisted)
+        if (IsEnabled || IsDisabledByUser || !InternalData.Allowed || InternalData.Blacklisted)
         {
             return false;
         }
@@ -656,7 +652,7 @@ public abstract class SplatoonScript
             PluginLog.Information($"Enabling script {InternalData.Name}");
             OnEnable();
         }
-        catch(Exception ex)
+        catch (Exception ex)
         {
             ScriptingProcessor.LogError(this, ex, nameof(Enable));
         }
@@ -668,7 +664,7 @@ public abstract class SplatoonScript
     internal bool Disable()
     {
         Controller.SaveConfig();
-        if(!IsEnabled)
+        if (!IsEnabled)
         {
             return false;
         }
@@ -678,7 +674,7 @@ public abstract class SplatoonScript
             PluginLog.Information($"Disabling script {this}");
             OnDisable();
         }
-        catch(Exception ex)
+        catch (Exception ex)
         {
             ScriptingProcessor.LogError(this, ex, nameof(Disable));
         }
