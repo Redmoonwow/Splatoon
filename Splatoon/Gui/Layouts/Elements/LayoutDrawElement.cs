@@ -1,4 +1,5 @@
 ﻿using Dalamud.Game;
+using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Interface.Components;
 using Dalamud.Interface.Utility.Raii;
 using ECommons.GameFunctions;
@@ -464,6 +465,21 @@ internal unsafe partial class CGui
                 }
             }
 
+            ImGuiUtils.SizedText("Object Kind:".Loc(), WidthElement);
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(WidthCombo);
+            if(ImGui.BeginCombo("##objectKindSel", el.ObjectKinds.Count == 0 ? "Any" : el.ObjectKinds.Print(), ImGuiComboFlags.HeightLarge))
+            {
+                if(ImGui.Button("Select All".Loc())) el.ObjectKinds.AddRange(Enum.GetValues<ObjectKind>());
+                ImGui.SameLine();
+                if(ImGui.Button("Deselect All".Loc())) el.ObjectKinds.Clear();
+                foreach(var x in Enum.GetValues<ObjectKind>())
+                {
+                    ImGuiEx.CollectionCheckbox($"{x}", x, el.ObjectKinds);
+                }
+                ImGui.EndCombo();
+            }
+
             ImGui.SetNextItemWidth(WidthElement + ImGui.GetStyle().ItemSpacing.X);
             if(ImGui.BeginCombo("##whilecasting", el.refActorCastReverse ? "While NOT casting".Loc() : "While casting".Loc()))
             {
@@ -764,7 +780,7 @@ internal unsafe partial class CGui
                 ImGuiEx.Checkbox("Source", ref el.refActorIsTetherSource);
                 ImGuiEx.HelpMarker("Checked - only check if object is tether source; unchecked - only check if object is tether target; dot - check if object is either tether source or target.");
                 ImGui.SameLine();
-                ImGui.Checkbox("Invert condition", ref el.refActorIsTetherInvert);
+                ImGui.Checkbox("Invert condition##tether", ref el.refActorIsTetherInvert);
 
                 ImGuiUtils.SizedText("         " + "Connected with:".Loc(), WidthElement);
                 ImGui.SameLine();
