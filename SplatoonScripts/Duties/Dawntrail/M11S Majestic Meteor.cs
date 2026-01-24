@@ -17,6 +17,7 @@ using ECommons.ImGuiMethods;
 using Splatoon;
 using Splatoon.SplatoonScripting;
 using Splatoon.SplatoonScripting.Priority;
+using static Splatoon.Splatoon;
 
 namespace SplatoonScriptsOfficial.Duties.Dawntrail;
 
@@ -68,17 +69,6 @@ public class M11S_Majestic_Meteor : SplatoonScript
     public override Metadata Metadata => new(6, "Garume");
     public override HashSet<uint>? ValidTerritories { get; } = [1325];
     private Config C => Controller.GetConfig<Config>();
-
-    private IPlayerCharacter BasePlayer
-    {
-        get
-        {
-            if (_basePlayerOverride == "")
-                return Player.Object;
-            return Svc.Objects.OfType<IPlayerCharacter>()
-                .FirstOrDefault(x => x.Name.ToString().EqualsIgnoreCase(_basePlayerOverride)) ?? Player.Object;
-        }
-    }
 
     public override void OnSetup()
     {

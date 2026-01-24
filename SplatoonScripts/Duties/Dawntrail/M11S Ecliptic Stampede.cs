@@ -20,6 +20,7 @@ using Splatoon;
 using Splatoon.Memory;
 using Splatoon.SplatoonScripting;
 using Splatoon.SplatoonScripting.Priority;
+using static Splatoon.Splatoon;
 
 namespace SplatoonScriptsOfficial.Duties.Dawntrail;
 
@@ -77,7 +78,7 @@ public unsafe class M11S_Ecliptic_Stampede : SplatoonScript
     #region Public Fields
 
     public override HashSet<uint>? ValidTerritories => [1325,];
-    public override Metadata? Metadata => new(3, "Redmoon");
+    public override Metadata? Metadata => new(4, "Redmoon");
 
     #endregion
 
@@ -101,18 +102,6 @@ public unsafe class M11S_Ecliptic_Stampede : SplatoonScript
         _towerPositions = []; // (Tower Type, N/E/S/W, Position, Assign Player, Assign Player)
 
     private Config C => Controller.GetConfig<Config>();
-
-    private IPlayerCharacter BasePlayer
-    {
-        get
-        {
-            if (C.BasePlayerOverride == "" ||
-                !Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.DutyRecorderPlayback])
-                return Player.Object;
-            return Svc.Objects.OfType<IPlayerCharacter>()
-                .FirstOrDefault(x => x.Name.ToString().EqualsIgnoreCase(C.BasePlayerOverride)) ?? Player.Object;
-        }
-    }
 
     #endregion
 
@@ -443,7 +432,6 @@ public unsafe class M11S_Ecliptic_Stampede : SplatoonScript
 
     public class Config : IEzConfig
     {
-        public string BasePlayerOverride = "";
         public bool IsGuidingMajesticMeteor = false;
 
         public PriorityData TowerAssignmentsPriority = new();
@@ -481,17 +469,6 @@ public unsafe class M11S_Ecliptic_Stampede : SplatoonScript
         ImGui.NewLine();
         // Debug
         if (!ImGuiEx.CollapsingHeader("Debug")) return;
-        ImGui.SetNextItemWidth(200);
-        ImGui.InputText("Player override", ref C.BasePlayerOverride, 50);
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(200);
-        if (ImGui.BeginCombo("Select..", "Select..."))
-        {
-            foreach (var x in Svc.Objects.OfType<IPlayerCharacter>())
-                if (ImGui.Selectable(x.GetNameWithWorld()))
-                    C.BasePlayerOverride = x.Name.ToString();
-            ImGui.EndCombo();
-        }
 
         ImGui.Text($"Current State: {_state}");
         ImGui.Text($"Majestic Meteor Role State: {_majesticMeteorRoleState}");
@@ -865,6 +842,10 @@ public unsafe class M11S_Ecliptic_Stampede : SplatoonScript
             Job.BRD,
             Job.MCH,
             Job.DNC,
+            Job.BLM,
+            Job.PCT,
+            Job.SMN,
+            Job.RDM,
             Job.WHM,
             Job.SCH,
             Job.AST,
@@ -894,6 +875,8 @@ public unsafe class M11S_Ecliptic_Stampede : SplatoonScript
         if (sortedRhNonMeteorPlayers.Count != 2 || sortedMeleeNonMeteorPlayers.Count != 2)
         {
             PluginLog.Error("Could not find 2 ranged/healer players for dps/healer towers.");
+            PluginLog.Error($"rhNonMeteorPlayers Count: {rhNonMeteorPlayers.Count}, meleeNonMeteorPlayers Count: {meleeNonMeteorPlayers.Count}");
+            PluginLog.Error($"sortedRhNonMeteorPlayers Count: {sortedRhNonMeteorPlayers.Count}, sortedMeleeNonMeteorPlayers Count: {sortedMeleeNonMeteorPlayers.Count}");
             OnReset();
             return;
         }
