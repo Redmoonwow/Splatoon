@@ -553,6 +553,8 @@ public unsafe class Splatoon : IDalamudPlugin
 
                 //if (CamAngleY > Config.maxcamY) return;
 
+                DisplayObjectOrigin.Current = default;
+
                 if(PinnedElementEditWindow.Script != null && PinnedElementEditWindow.EditingElement != null && !PinnedElementEditWindow.Script.InternalData.UnconditionalDraw)
                 {
                     S.RenderManager.GetRenderer(PinnedElementEditWindow.EditingElement).ProcessElement(PinnedElementEditWindow.EditingElement, null, true);
@@ -598,6 +600,7 @@ public unsafe class Splatoon : IDalamudPlugin
                     {
                         foreach(var z in x.Controller.Layouts)
                         {
+                            DisplayObjectOrigin.Current = new(x.InternalData.FullName, z.Key, null);
                             ProcessLayout(z.Value, 
                                 (x.InternalData.UnconditionalDraw && x.InternalData.UnconditionalDrawLayouts.Contains(z.Key)) 
                                 || (S.PinnedLayoutEdit.IsOpen && ReferenceEquals(S.PinnedLayoutEdit.EditingLayout, z.Value))
@@ -611,10 +614,12 @@ public unsafe class Splatoon : IDalamudPlugin
                     {
                         foreach(var z in x.Controller.Elements)
                         {
+                            DisplayObjectOrigin.Current = new(x.InternalData.FullName, null, z.Key);
                             S.RenderManager.GetRenderer(z.Value).ProcessElement(z.Value, null, x.InternalData.UnconditionalDraw && x.InternalData.UnconditionalDrawElements.Contains(z.Key));
                         }
                     }
                 }
+                DisplayObjectOrigin.Current = default;
                 foreach(var e in InjectedElements)
                 {
                     S.RenderManager.GetRenderer(e).ProcessElement(e);
@@ -647,13 +652,16 @@ public unsafe class Splatoon : IDalamudPlugin
                     }
                     foreach(var l in de.Layouts)
                     {
+                        DisplayObjectOrigin.Current = new(de.Name, null, null);
                         ProcessLayout(l);
                     }
                     foreach(var e in de.Elements)
                     {
+                        DisplayObjectOrigin.Current = new(de.Name, null, e.Name);
                         S.RenderManager.GetRenderer(e).ProcessElement(e);
                     }
                 }
+                DisplayObjectOrigin.Current = default;
             }
             else
             {
@@ -690,6 +698,20 @@ public unsafe class Splatoon : IDalamudPlugin
     }
 
     internal void ProcessLayout(Layout l, bool forceVisible = false)
+    {
+        var origin = DisplayObjectOrigin.Current;
+        DisplayObjectOrigin.Current = origin with { Layout = string.IsNullOrEmpty(l.Name) ? origin.Layout : l.Name, Element = null };
+        try
+        {
+            ProcessLayoutInternal(l, forceVisible);
+        }
+        finally
+        {
+            DisplayObjectOrigin.Current = origin;
+        }
+    }
+
+    private void ProcessLayoutInternal(Layout l, bool forceVisible)
     {
         l.ConditionalStatus = null;
         if(LayoutUtils.IsLayoutVisible(l) || forceVisible)
@@ -745,6 +767,7 @@ public unsafe class Splatoon : IDalamudPlugin
         for(var i = 0; i < elementCollection.Count; i++)
         {
             var element = elementCollection[i];
+            DisplayObjectOrigin.Current = DisplayObjectOrigin.Current with { Element = element.Name };
             if(element.Conditional && element.ConditionalReset) l.ConditionalStatus = null;
             var shouldSkip = l.ConditionalStatus == false && (l.ConditionalAnd || (!l.ConditionalAnd && l.ConditionalStatus == false && !element.Conditional));
             if(shouldSkip) continue;

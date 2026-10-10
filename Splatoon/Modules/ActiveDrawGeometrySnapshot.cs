@@ -51,6 +51,9 @@ internal static unsafe class ActiveDrawGeometrySnapshot
         item = default;
         item.id = GetId(displayObject, index, frame);
         item.source = "render";
+        item.Namespace = displayObject.Origin.Namespace;
+        item.layout = displayObject.Origin.Layout;
+        item.element = displayObject.Origin.Element;
         item.renderEngine = displayObject.RenderEngineKind.ToString();
 
         if (displayObject is DirectX11DisplayObjects.DisplayObjectCircle dxCircle)
