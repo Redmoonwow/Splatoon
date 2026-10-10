@@ -84,6 +84,6 @@ public static unsafe class Extensions
     /// <returns></returns>
     public static string GetUniqueId(this Element e, IGameObject? maybeGameObject = null)
     {
-        return e.GUID.ToString() + maybeGameObject?.GameObjectId;
+        return e.GetGUIDString() + maybeGameObject?.GameObjectId;
     }
 }

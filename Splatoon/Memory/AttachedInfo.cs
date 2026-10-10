@@ -106,13 +106,7 @@ public static unsafe class AttachedInfo
 
     public static bool TryGetVfx(this IGameObject go, out Dictionary<string, VFXInfo>? fx)
     {
-        if(VFXInfos.ContainsKey(go.Address))
-        {
-            fx = VFXInfos[go.Address];
-            return true;
-        }
-        fx = default;
-        return false;
+        return VFXInfos.TryGetValue(go.Address, out fx);
     }
 
     public static List<CachedTetherInfo> GetOrCreateTetherInfo(nint ptr)
@@ -129,9 +123,8 @@ public static unsafe class AttachedInfo
 
     public static bool TryGetSpecificVfxInfo(this IGameObject go, string path, out VFXInfo info)
     {
-        if(TryGetVfx(go, out var dict) && dict?.ContainsKey(path) == true)
+        if(TryGetVfx(go, out var dict) && dict != null && dict.TryGetValue(path, out info))
         {
-            info = dict[path];
             return true;
         }
         info = default;

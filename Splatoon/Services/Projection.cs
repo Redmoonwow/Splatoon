@@ -86,6 +86,14 @@ internal class Projection : IDisposable
         {
             ProjectingItems.Clear();
         }
+        else if(!P.Config.EnableProjection && (Svc.Objects.LocalPlayer == null || !IsAnyProjectorActionForced()))
+        {
+            // Nothing can be drawn: projection is disabled and no enabled layout forces any action.
+            Blacklist = false;
+            Stopwatch.Stop();
+            LastSw = Stopwatch.ElapsedTicks;
+            return;
+        }
         var elementIndex = 0;
         List<(IBattleNpc obj, Element element)> injectedElements = [];
         foreach(var x in Svc.Objects)
@@ -110,7 +118,7 @@ internal class Projection : IDisposable
                         blacklisted = true;
                     }
                     ProjectionItemDescriptor descriptor = P.ConfigGui.IsOpen ? new(new(b.CastInfo.ActionType, b.CastInfo.ActionId), b.ObjectId, blacklisted) : null;
-                    ProjectingItems.Add(descriptor);
+                    if(descriptor != null) ProjectingItems.Add(descriptor);
                     bool? showOverride = null;
                     var isAlreadyProcessed = false;
                     foreach(var layout in P.Config.LayoutsL)
@@ -132,7 +140,7 @@ internal class Projection : IDisposable
                                 foreach(var layoutElement in layout.ElementsL)
                                 {
                                     if(layoutElement.Enabled
-                                        && layoutElement.type.EqualsAny(1, 3, 4)
+                                        && layoutElement.type is 1 or 3 or 4
                                         && layoutElement.refActorRequireCast
                                         && layoutElement.refActorCastId.Contains(b.CastInfo.ActionId)
                                         && LayoutUtils.IsAttributeMatches(layoutElement, b)
@@ -277,23 +285,39 @@ internal class Projection : IDisposable
         LastSw = Stopwatch.ElapsedTicks;
     }
 
+    private bool IsAnyProjectorActionForced()
+    {
+        foreach(var layout in P.Config.LayoutsL)
+        {
+            if(layout.ForcedProjectorActions.Count > 0 && LayoutUtils.IsLayoutEnabled(layout)) return true;
+        }
+        return false;
+    }
+
+    // Shape per action, without the caster's hitbox. Parsing omen paths on every frame for every caster is not needed.
+    private readonly Dictionary<uint, (ShapeData Shape, bool AddHitbox)> ShapeCache = [];
     public ShapeData GuessShapeAndSize(Action data, IGameObject actor)
     {
-        return data.CastType switch
+        if(!ShapeCache.TryGetValue(data.RowId, out var cached))
         {
-            2 => new(Shape.Circle, data.EffectRange),
-            3 => new(Shape.Cone, data.EffectRange + actor.HitboxRadius, DetermineConeAngle(data).Rad * HalfWidth),
-            4 => new(Shape.Rect, data.EffectRange + actor.HitboxRadius, data.XAxisModifier * HalfWidth),
-            5 => new(Shape.Circle, data.EffectRange + actor.HitboxRadius),
-            //6 => custom shapes
-            //7 => new AOEShapeCircle(data.EffectRange), - used for player ground-targeted circles a-la asylum
-            //8 => new(Shape.Rect, default, data.XAxisModifier * HalfWidth), // charges
-            10 => new(Shape.Donut, DetermineDonutRange(data)?.Outer ?? 0, DetermineDonutRange(data)?.Inner ?? 0),
-            11 => new(Shape.Cross, data.EffectRange, data.XAxisModifier * HalfWidth),
-            12 => new(Shape.Rect, data.EffectRange, data.XAxisModifier * HalfWidth),
-            13 => new(Shape.Cone, data.EffectRange, DetermineConeAngle(data).Rad * HalfWidth),
-            _ => default
-        };
+            cached = data.CastType switch
+            {
+                2 => (new(Shape.Circle, data.EffectRange), false),
+                3 => (new(Shape.Cone, data.EffectRange, DetermineConeAngle(data).Rad * HalfWidth), true),
+                4 => (new(Shape.Rect, data.EffectRange, data.XAxisModifier * HalfWidth), true),
+                5 => (new(Shape.Circle, data.EffectRange), true),
+                //6 => custom shapes
+                //7 => new AOEShapeCircle(data.EffectRange), - used for player ground-targeted circles a-la asylum
+                //8 => new(Shape.Rect, default, data.XAxisModifier * HalfWidth), // charges
+                10 => (new(Shape.Donut, DetermineDonutRange(data)?.Outer ?? 0, DetermineDonutRange(data)?.Inner ?? 0), false),
+                11 => (new(Shape.Cross, data.EffectRange, data.XAxisModifier * HalfWidth), false),
+                12 => (new(Shape.Rect, data.EffectRange, data.XAxisModifier * HalfWidth), false),
+                13 => (new(Shape.Cone, data.EffectRange, DetermineConeAngle(data).Rad * HalfWidth), false),
+                _ => (default(ShapeData), false)
+            };
+            ShapeCache[data.RowId] = cached;
+        }
+        return cached.AddHitbox ? cached.Shape with { Range = cached.Shape.Range + actor.HitboxRadius } : cached.Shape;
     }
 
     private Dictionary<string, (float Inner, float Outer)?> DonutCache = [];

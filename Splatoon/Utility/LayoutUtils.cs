@@ -9,6 +9,8 @@ using Splatoon.Memory;
 using Splatoon.Structures;
 using System.Text.RegularExpressions;
 using static FFXIVClientStructs.FFXIV.Client.Game.Character.VfxContainer;
+using CSCharacter = FFXIVClientStructs.FFXIV.Client.Game.Character.Character;
+using StatusManager = FFXIVClientStructs.FFXIV.Client.Game.StatusManager;
 
 namespace Splatoon.Utility;
 
@@ -23,7 +25,7 @@ public static unsafe class LayoutUtils
              (e.refActorObjectID == 0 || o.EntityId == e.refActorObjectID) &&
              (e.refActorDataID == 0 || o.DataId == e.refActorDataID) &&
              (e.refActorNPCID == 0 || o.Struct()->GetNameId() == e.refActorNPCID) &&
-             (e.refActorPlaceholder.Count == 0 || e.refActorPlaceholder.Any(x => ResolvePlaceholder(x) == o.Address)) &&
+             (e.refActorPlaceholder.Count == 0 || IsPlaceholderMatches(e.refActorPlaceholder, o.Address)) &&
              (e.refActorNPCNameID == 0 || (o is ICharacter c2 && c2.NameId == e.refActorNPCNameID)) &&
              (e.refActorVFXPath == "" || (AttachedInfo.TryGetSpecificVfxInfo(o, e.refActorVFXPath, out var info) && info.Age.InRange(e.refActorVFXMin, e.refActorVFXMax))) &&
              ((e.refActorObjectEffectData1 == 0 && e.refActorObjectEffectData2 == 0) || (AttachedInfo.ObjectEffectInfos.TryGetValue(o.Address, out var einfo) && IsObjectEffectMatches(e, o, einfo) &&
@@ -36,7 +38,7 @@ public static unsafe class LayoutUtils
             if(e.refActorComparisonType == 2 && o.EntityId == e.refActorObjectID) return true;
             if(e.refActorComparisonType == 3 && o.DataId == e.refActorDataID) return true;
             if(e.refActorComparisonType == 4 && o.Struct()->GetNameId() == e.refActorNPCID) return true;
-            if(e.refActorComparisonType == 5 && e.refActorPlaceholder.Any(x => ResolvePlaceholder(x) == o.Address)) return true;
+            if(e.refActorComparisonType == 5 && IsPlaceholderMatches(e.refActorPlaceholder, o.Address)) return true;
             if(e.refActorComparisonType == 6 && o is ICharacter c2 && c2.NameId == e.refActorNPCNameID) return true;
             if(e.refActorComparisonType == 7 && AttachedInfo.TryGetSpecificVfxInfo(o, e.refActorVFXPath, out var info) && info.Age.InRange(e.refActorVFXMin, e.refActorVFXMax)) return true;
             if(e.refActorComparisonType == 8 && AttachedInfo.ObjectEffectInfos.TryGetValue(o.Address, out var einfo) && IsObjectEffectMatches(e, o, einfo)) return true;
@@ -58,13 +60,98 @@ public static unsafe class LayoutUtils
         }
         else
         {
-            return info.Any(last => last.data1 == e.refActorObjectEffectData1 && last.data2 == e.refActorObjectEffectData2 && last.Age.InRange(e.refActorObjectEffectMin, e.refActorObjectEffectMax));
+            foreach(var x in info)
+            {
+                if(x.data1 == e.refActorObjectEffectData1 && x.data2 == e.refActorObjectEffectData2 && x.Age.InRange(e.refActorObjectEffectMin, e.refActorObjectEffectMax)) return true;
+            }
+            return false;
         }
+    }
+
+    // Plain loop instead of a lambda: a lambda capturing a parameter allocates a closure on every call of the
+    // enclosing method, and IsAttributeMatches runs for every element and object on every frame.
+    private static bool IsPlaceholderMatches(List<string> placeholders, nint address)
+    {
+        foreach(var x in placeholders)
+        {
+            if(ResolvePlaceholder(x) == address) return true;
+        }
+        return false;
     }
 
     public static bool IsNameMatches(Element e, IGameObject o)
     {
-        return !string.IsNullOrEmpty(e.refActorNameIntl.Get(e.refActorName)) && (e.refActorNameIntl.Get(e.refActorName) == "*" || o.Name.ToString().ContainsIgnoreCase(e.refActorNameIntl.Get(e.refActorName)));
+        var name = e.refActorNameIntl.Get(e.refActorName);
+        return !string.IsNullOrEmpty(name) && (name == "*" || GetObjectName(o).ContainsIgnoreCase(name));
+    }
+
+    // Objects do not change while the framework tick is running, so some object data is cached for the duration of a tick only:
+    // - The object table has 819 slots and was scanned again for every element that refers to game objects.
+    // - Reading IGameObject.Name parses a SeString from game memory on every access, and name based elements
+    //   compare every object against every element on every frame.
+    private static readonly List<IGameObject> TickObjects = [];
+    private static bool TickObjectsValid = false;
+    private static readonly Dictionary<nint, string> ObjectNameCache = [];
+    private static bool TickObjectCacheActive = false;
+
+    internal static void BeginTickObjectCache()
+    {
+        TickObjects.Clear();
+        TickObjectsValid = false;
+        ObjectNameCache.Clear();
+        TickObjectCacheActive = true;
+    }
+
+    internal static void EndTickObjectCache()
+    {
+        TickObjects.Clear();
+        TickObjectsValid = false;
+        ObjectNameCache.Clear();
+        TickObjectCacheActive = false;
+    }
+
+    internal static bool IsTickObjectCacheUsable => TickObjectCacheActive && Svc.Framework.IsInFrameworkUpdateThread;
+
+    /// <summary>
+    /// Same objects as <see cref="Svc.Objects"/>. While the framework tick is running, the table is only scanned once.
+    /// </summary>
+    internal static List<IGameObject> GetObjects()
+    {
+        if(!IsTickObjectCacheUsable) return [.. Svc.Objects];
+        if(!TickObjectsValid)
+        {
+            TickObjects.Clear();
+            foreach(var x in Svc.Objects)
+            {
+                TickObjects.Add(x);
+            }
+            TickObjectsValid = true;
+        }
+        return TickObjects;
+    }
+
+    /// <summary>
+    /// Same as <see cref="Svc.Objects"/>.SearchById, using <see cref="GetObjects"/>.
+    /// </summary>
+    internal static IGameObject SearchById(ulong gameObjectId)
+    {
+        if(gameObjectId == 0) return null;
+        foreach(var x in GetObjects())
+        {
+            if(x.GameObjectId == gameObjectId) return x;
+        }
+        return null;
+    }
+
+    private static string GetObjectName(IGameObject o)
+    {
+        if(!IsTickObjectCacheUsable) return o.Name.ToString();
+        if(!ObjectNameCache.TryGetValue(o.Address, out var name))
+        {
+            name = o.Name.ToString();
+            ObjectNameCache[o.Address] = name;
+        }
+        return name;
     }
 
     public static nint ResolvePlaceholder(string ph)
@@ -130,7 +217,7 @@ public static unsafe class LayoutUtils
                             {
                                 foreach(var p in e.refActorTetherConnectedWithPlayer)
                                 {
-                                    var tar = Utils.ResolvePronounBPO(p);
+                                    var tar = Utils.ResolvePronounBPOCached(p);
                                     if(tar != null)
                                     {
                                         if(t.TargetId.ObjectId == tar->EntityId) return true;
@@ -161,7 +248,7 @@ public static unsafe class LayoutUtils
                             {
                                 foreach(var p in e.refActorTetherConnectedWithPlayer)
                                 {
-                                    var tar = Utils.ResolvePronounBPO(p);
+                                    var tar = Utils.ResolvePronounBPOCached(p);
                                     if(tar != null)
                                     {
                                         if(t.Target == tar->EntityId) return true;
@@ -178,7 +265,7 @@ public static unsafe class LayoutUtils
             //reverse lookup goes brrrrr
             if(e.refActorIsTetherLive)
             {
-                foreach(var o in Svc.Objects)
+                foreach(var o in GetObjects())
                 {
                     if(o.Address == obj.Address) continue;
                     if(o is ICharacter chr)
@@ -197,7 +284,7 @@ public static unsafe class LayoutUtils
                                 {
                                     foreach(var p in e.refActorTetherConnectedWithPlayer)
                                     {
-                                        var tar = Utils.ResolvePronounBPO(p);
+                                        var tar = Utils.ResolvePronounBPOCached(p);
                                         if(tar != null)
                                         {
                                             if(tar->EntityId == chr.EntityId) return true;
@@ -231,7 +318,7 @@ public static unsafe class LayoutUtils
                             {
                                 foreach(var p in e.refActorTetherConnectedWithPlayer)
                                 {
-                                    var tar = Utils.ResolvePronounBPO(p);
+                                    var tar = Utils.ResolvePronounBPOCached(p);
                                     if(tar != null)
                                     {
                                         if(x.Key == (nint)tar) return true;
@@ -337,28 +424,50 @@ public static unsafe class LayoutUtils
 
     public static bool CheckEffect(Element e, IBattleChara c)
     {
+        // Reads the status array directly: going through StatusList allocates a wrapper per status,
+        // and ContainsAll/ContainsAny enumerated it again for every requested buff id.
+        var sm = ((CSCharacter*)c.Address)->GetStatusManager();
+        if(sm == null) return false.Invert(e.refActorRequireBuffsInvert);
+        bool result;
         if(e.refActorRequireAllBuffs)
         {
-            if(e.refActorUseBuffTime)
+            result = true;
+            foreach(var id in e.refActorBuffId)
             {
-                return c.StatusList.Where(x => x.RemainingTime.InRange(e.refActorBuffTimeMin, e.refActorBuffTimeMax) && (!e.refActorUseBuffParam || x.Param == e.refActorBuffParam)).Select(x => x.StatusId).ContainsAll(e.refActorBuffId).Invert(e.refActorRequireBuffsInvert);
-            }
-            else
-            {
-                return c.StatusList.Where(x => !e.refActorUseBuffParam || x.Param == e.refActorBuffParam).Select(x => x.StatusId).ContainsAll(e.refActorBuffId).Invert(e.refActorRequireBuffsInvert);
+                if(!HasMatchingStatus(e, sm, id))
+                {
+                    result = false;
+                    break;
+                }
             }
         }
         else
         {
-            if(e.refActorUseBuffTime)
+            result = false;
+            foreach(var id in e.refActorBuffId)
             {
-                return c.StatusList.Where(x => x.RemainingTime.InRange(e.refActorBuffTimeMin, e.refActorBuffTimeMax) && (!e.refActorUseBuffParam || x.Param == e.refActorBuffParam)).Select(x => x.StatusId).ContainsAny(e.refActorBuffId).Invert(e.refActorRequireBuffsInvert);
-            }
-            else
-            {
-                return c.StatusList.Where(x => !e.refActorUseBuffParam || x.Param == e.refActorBuffParam).Select(x => x.StatusId).ContainsAny(e.refActorBuffId).Invert(e.refActorRequireBuffsInvert);
+                if(HasMatchingStatus(e, sm, id))
+                {
+                    result = true;
+                    break;
+                }
             }
         }
+        return result.Invert(e.refActorRequireBuffsInvert);
+    }
+
+    private static bool HasMatchingStatus(Element e, StatusManager* sm, uint statusId)
+    {
+        var count = Math.Min((int)sm->NumValidStatuses, sm->Status.Length);
+        for(var i = 0; i < count; i++)
+        {
+            ref readonly var s = ref sm->Status[i];
+            if(s.StatusId == 0 || s.StatusId != statusId) continue;
+            if(e.refActorUseBuffTime && !s.RemainingTime.InRange(e.refActorBuffTimeMin, e.refActorBuffTimeMax)) continue;
+            if(e.refActorUseBuffParam && s.Param != e.refActorBuffParam) continue;
+            return true;
+        }
+        return false;
     }
 
     public static bool IsLayoutEnabled(Layout layout)
@@ -386,9 +495,10 @@ public static unsafe class LayoutUtils
         if(!IsLayoutEnabled(layout)) return false;
         if(layout.UseDistanceLimit && layout.DistanceLimitType == 0)
         {
-            if(Svc.Targets.Target != null)
+            var target = Svc.Targets.Target;
+            if(target != null)
             {
-                var dist = Vector3.Distance(Svc.Targets.Target.GetPositionXZY(), Utils.GetPlayerPositionXZY()) - (layout.DistanceLimitTargetHitbox ? Svc.Targets.Target.HitboxRadius : 0) - (layout.DistanceLimitMyHitbox ? BasePlayer.HitboxRadius : 0);
+                var dist = Vector3.Distance(target.GetPositionXZY(), Utils.GetPlayerPositionXZY()) - (layout.DistanceLimitTargetHitbox ? target.HitboxRadius : 0) - (layout.DistanceLimitMyHitbox ? BasePlayer.HitboxRadius : 0);
                 if(!(dist >= layout.MinDistance && dist < layout.MaxDistance)) return false;
             }
             else
@@ -402,13 +512,14 @@ public static unsafe class LayoutUtils
             {
                 if(t.UserDisabled) continue;
                 if(t.FiredState == 2) continue;
-                if((t.Type == 2 || t.Type == 3) && !t.Disabled)
+                if((t.Type == 2 || t.Type == 3) && !t.Disabled && P.CurrentChatMessages.Count > 0)
                 {
+                    var trg = t.MatchIntl.Get(t.Match);
+                    var regex = t.IsRegex && trg != string.Empty ? t.GetRegex(trg) : null;
                     foreach(var CurrentChatMessage in P.CurrentChatMessages)
                     {
-                        var trg = t.MatchIntl.Get(t.Match);
                         if(trg != string.Empty &&
-                            (t.IsRegex ? Regex.IsMatch(CurrentChatMessage, trg) : CurrentChatMessage.ContainsIgnoreCase(trg))
+                            (t.IsRegex ? regex.IsMatch(CurrentChatMessage) : CurrentChatMessage.ContainsIgnoreCase(trg))
                             )
                         {
                             if(t.Duration == 0)

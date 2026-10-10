@@ -64,6 +64,8 @@ internal sealed unsafe class ImGuiLegacyRenderer : RenderEngine
         else if(element.type == 1 || element.type == 3 || element.type == 4)
         {
             if(element.includeOwnHitbox) radius += BasePlayer.HitboxRadius;
+            // Svc.Targets.Target creates a new object on every access
+            var target = element.refActorType == 2 ? Svc.Targets.Target : null;
             if(element.refActorType == 1 && LayoutUtils.CheckCharacterAttributes(element, BasePlayer, true))
             {
                 ret = true;
@@ -82,45 +84,46 @@ internal sealed unsafe class ImGuiLegacyRenderer : RenderEngine
                 {
                     if(element.coneAngleMax > element.coneAngleMin)
                     {
+                        var rotation = BasePlayer.GetRotationWithOverride(layout, element);
                         for(var x = element.coneAngleMin; x < element.coneAngleMax; x += GetFillStepCone(element.FillStep))
                         {
-                            AddConeLine(Utils.GetPlayerPositionXZY(), BasePlayer.GetRotationWithOverride(layout, element), (BasePlayer.GetRotationWithOverride(layout, element).RadiansToDegrees() - x.Float()).DegreesToRadians(), element, radius, x == element.coneAngleMin ? 1f : element.fillIntensity ?? Utils.DefaultFillIntensity, false, layout);
+                            AddConeLine(Utils.GetPlayerPositionXZY(), rotation, (rotation.RadiansToDegrees() - x.Float()).DegreesToRadians(), element, radius, x == element.coneAngleMin ? 1f : element.fillIntensity ?? Utils.DefaultFillIntensity, false, layout);
                         }
-                        AddConeLine(Utils.GetPlayerPositionXZY(), BasePlayer.GetRotationWithOverride(layout, element), (BasePlayer.GetRotationWithOverride(layout, element).RadiansToDegrees() - element.coneAngleMax.Float()).DegreesToRadians(), element, radius, 1f, true, layout);
+                        AddConeLine(Utils.GetPlayerPositionXZY(), rotation, (rotation.RadiansToDegrees() - element.coneAngleMax.Float()).DegreesToRadians(), element, radius, 1f, true, layout);
                     }
                 }
             }
-            else if(element.refActorType == 2 && Svc.Targets.Target != null
-                && Svc.Targets.Target.IsBattleNpc() && LayoutUtils.CheckCharacterAttributes(element, Svc.Targets.Target, true))
+            else if(element.refActorType == 2 && target != null
+                && target.IsBattleNpc() && LayoutUtils.CheckCharacterAttributes(element, target, true))
             {
-                if(layout == null || !layout.UseDistanceLimit || LayoutUtils.CheckDistanceCondition(layout, Svc.Targets.Target.GetPositionXZY()))
+                if(layout == null || !layout.UseDistanceLimit || LayoutUtils.CheckDistanceCondition(layout, target.GetPositionXZY()))
                 {
                     ret = true;
-                    if(element.includeHitbox) radius += Svc.Targets.Target.HitboxRadius;
+                    if(element.includeHitbox) radius += target.HitboxRadius;
                     if(element.type == 1)
                     {
-                        DrawCircle(layout, element, Svc.Targets.Target.GetPositionXZY().X, Svc.Targets.Target.GetPositionXZY().Y,
-                            Svc.Targets.Target.GetPositionXZY().Z, radius, element.includeRotation ? Svc.Targets.Target.GetRotationWithOverride(layout, element) : 0f,
-                            element.overlayPlaceholders ? Svc.Targets.Target : null);
+                        DrawCircle(layout, element, target.GetPositionXZY().X, target.GetPositionXZY().Y,
+                            target.GetPositionXZY().Z, radius, element.includeRotation ? target.GetRotationWithOverride(layout, element) : 0f,
+                            element.overlayPlaceholders ? target : null);
                     }
                     else if(element.type == 3)
                     {
                         if(element.FaceMe)
                         {
-                            var list = Utils.GetFacePositions(layout, Svc.Targets.Target, element.faceplayer);
+                            var list = Utils.GetFacePositions(layout, target, element.faceplayer);
                             if(list != null)
                             {
                                 foreach(var pos in list)
                                 {
-                                    var angle = ((element.FaceInvert ? 0 : 180) - MathHelper.GetRelativeAngle(Svc.Targets.Target.Position.ToVector2(), pos.ToVector2())).DegreesToRadians();
-                                    AddRotatedLine(layout, element.FaceInvert ? MathHelper.SwapYZ(pos) : Svc.Targets.Target.GetPositionXZY(), angle, element, radius, Svc.Targets.Target.HitboxRadius);
+                                    var angle = ((element.FaceInvert ? 0 : 180) - MathHelper.GetRelativeAngle(target.Position.ToVector2(), pos.ToVector2())).DegreesToRadians();
+                                    AddRotatedLine(layout, element.FaceInvert ? MathHelper.SwapYZ(pos) : target.GetPositionXZY(), angle, element, radius, target.HitboxRadius);
                                 }
                             }
                         }
                         else
                         {
-                            var angle = Svc.Targets.Target.GetRotationWithOverride(layout, element);
-                            AddRotatedLine(layout, Svc.Targets.Target.GetPositionXZY(), angle, element, radius, Svc.Targets.Target.HitboxRadius);
+                            var angle = target.GetRotationWithOverride(layout, element);
+                            AddRotatedLine(layout, target.GetPositionXZY(), angle, element, radius, target.HitboxRadius);
                         }
 
                     }
@@ -128,19 +131,21 @@ internal sealed unsafe class ImGuiLegacyRenderer : RenderEngine
                     {
                         if(element.coneAngleMax > element.coneAngleMin)
                         {
+                            var faceList = element.FaceMe ? Utils.GetFacePositions(layout, target, element.faceplayer) : null;
+                            var rotation = element.FaceMe ? 0f : target.GetRotationWithOverride(layout, element);
                             for(var x = element.coneAngleMin; x < element.coneAngleMax; x += GetFillStepCone(element.FillStep))
                             {
                                 if(element.FaceMe)
                                 {
-                                    var list = Utils.GetFacePositions(layout, Svc.Targets.Target, element.faceplayer);
+                                    var list = faceList;
                                     if(list != null)
                                     {
                                         foreach(var pos in list)
                                         {
-                                            var angle = ((element.FaceInvert ? 0 : 180) - (MathHelper.GetRelativeAngle(Svc.Targets.Target.Position.ToVector2(), pos.ToVector2()) - x.Float())).DegreesToRadians();
-                                            var baseAngle = ((element.FaceInvert ? 0 : 180) - MathHelper.GetRelativeAngle(Svc.Targets.Target.Position.ToVector2(), pos.ToVector2())).DegreesToRadians();
+                                            var angle = ((element.FaceInvert ? 0 : 180) - (MathHelper.GetRelativeAngle(target.Position.ToVector2(), pos.ToVector2()) - x.Float())).DegreesToRadians();
+                                            var baseAngle = ((element.FaceInvert ? 0 : 180) - MathHelper.GetRelativeAngle(target.Position.ToVector2(), pos.ToVector2())).DegreesToRadians();
                                             AddConeLine(
-                                                element.FaceInvert ? MathHelper.SwapYZ(pos) : Svc.Targets.Target.GetPositionXZY(),
+                                                element.FaceInvert ? MathHelper.SwapYZ(pos) : target.GetPositionXZY(),
                                                 baseAngle,
                                                 angle,
                                                 element,
@@ -153,10 +158,10 @@ internal sealed unsafe class ImGuiLegacyRenderer : RenderEngine
                                 }
                                 else
                                 {
-                                    var angle = (Svc.Targets.Target.GetRotationWithOverride(layout, element).RadiansToDegrees() - x.Float()).DegreesToRadians();
-                                    var baseAngle = Svc.Targets.Target.GetRotationWithOverride(layout, element);
+                                    var angle = (rotation.RadiansToDegrees() - x.Float()).DegreesToRadians();
+                                    var baseAngle = rotation;
                                     AddConeLine(
-                                        Svc.Targets.Target.GetPositionXZY(),
+                                        target.GetPositionXZY(),
                                         baseAngle,
                                         angle,
                                         element,
@@ -170,38 +175,37 @@ internal sealed unsafe class ImGuiLegacyRenderer : RenderEngine
                             {
                                 if(element.FaceMe)
                                 {
-                                    var list = Utils.GetFacePositions(layout, Svc.Targets.Target, element.faceplayer);
+                                    var list = faceList;
                                     if(list != null)
                                     {
                                         foreach(var pos in list)
                                         {
-                                            var angle = ((element.FaceInvert ? 0 : 180) - (MathHelper.GetRelativeAngle(Svc.Targets.Target.Position.ToVector2(), pos.ToVector2()) - element.coneAngleMax.Float())).DegreesToRadians();
-                                            var baseAngle = ((element.FaceInvert ? 0 : 180) - MathHelper.GetRelativeAngle(Svc.Targets.Target.Position.ToVector2(), pos.ToVector2())).DegreesToRadians();
-                                            AddConeLine(element.FaceInvert ? MathHelper.SwapYZ(pos) : Svc.Targets.Target.GetPositionXZY(), baseAngle, angle, element, radius, 1f, true, layout);
+                                            var angle = ((element.FaceInvert ? 0 : 180) - (MathHelper.GetRelativeAngle(target.Position.ToVector2(), pos.ToVector2()) - element.coneAngleMax.Float())).DegreesToRadians();
+                                            var baseAngle = ((element.FaceInvert ? 0 : 180) - MathHelper.GetRelativeAngle(target.Position.ToVector2(), pos.ToVector2())).DegreesToRadians();
+                                            AddConeLine(element.FaceInvert ? MathHelper.SwapYZ(pos) : target.GetPositionXZY(), baseAngle, angle, element, radius, 1f, true, layout);
                                         }
                                     }
                                 }
                                 else
                                 {
-                                    var angle = (Svc.Targets.Target.GetRotationWithOverride(layout, element).RadiansToDegrees() - element.coneAngleMax.Float()).DegreesToRadians();
-                                    var baseAngle = Svc.Targets.Target.GetRotationWithOverride(layout, element);
-                                    AddConeLine(Svc.Targets.Target.GetPositionXZY(), baseAngle, angle, element, radius, 1f, true, layout);
+                                    var angle = (rotation.RadiansToDegrees() - element.coneAngleMax.Float()).DegreesToRadians();
+                                    var baseAngle = rotation;
+                                    AddConeLine(target.GetPositionXZY(), baseAngle, angle, element, radius, 1f, true, layout);
                                 }
 
                             }
                         }
-                        //DisplayObjects.Add(new DisplayObjectCone(e, Svc.Targets.Target.Position, Svc.Targets.Target.Rotation, radius));
+                        //DisplayObjects.Add(new DisplayObjectCone(e, target.Position, target.Rotation, radius));
                     }
                 }
             }
             else if(element.refActorType == 0)
             {
                 List<IGameObject> objectList = [];
-                foreach(var a in Svc.Objects)
+                foreach(var a in LayoutUtils.GetObjects())
                 {
-                    var targetable = a.Struct()->GetIsTargetable();
                     if(LayoutUtils.IsAttributeMatches(element, a)
-                            && CommonRenderUtils.IsElementObjectMatches(layout, element, targetable, a))
+                            && CommonRenderUtils.IsElementObjectMatches(layout, element, a.Struct()->GetIsTargetable(), a))
                     {
                         if(layout == null || !layout.UseDistanceLimit || LayoutUtils.CheckDistanceCondition(layout, a.GetPositionXZY()))
                         {
@@ -249,11 +253,13 @@ internal sealed unsafe class ImGuiLegacyRenderer : RenderEngine
                         {
                             if(element.coneAngleMax > element.coneAngleMin)
                             {
+                                var faceList = element.FaceMe ? Utils.GetFacePositions(layout, obj, element.faceplayer) : null;
+                                var rotation = element.FaceMe ? 0f : obj.GetRotationWithOverride(layout, element);
                                 for(var x = element.coneAngleMin; x < element.coneAngleMax; x += GetFillStepCone(element.FillStep))
                                 {
                                     if(element.FaceMe)
                                     {
-                                        var list = Utils.GetFacePositions(layout, obj, element.faceplayer);
+                                        var list = faceList;
                                         if(list != null)
                                         {
                                             foreach(var pos in list)
@@ -274,8 +280,8 @@ internal sealed unsafe class ImGuiLegacyRenderer : RenderEngine
                                     }
                                     else
                                     {
-                                        var angle = (obj.GetRotationWithOverride(layout, element).RadiansToDegrees() - x.Float()).DegreesToRadians();
-                                        var baseAngle = obj.GetRotationWithOverride(layout, element);
+                                        var angle = (rotation.RadiansToDegrees() - x.Float()).DegreesToRadians();
+                                        var baseAngle = rotation;
                                         AddConeLine(
                                             obj.GetPositionXZY(),
                                             baseAngle,
@@ -291,7 +297,7 @@ internal sealed unsafe class ImGuiLegacyRenderer : RenderEngine
                                 {
                                     if(element.FaceMe)
                                     {
-                                        var list = Utils.GetFacePositions(layout, obj, element.faceplayer);
+                                        var list = faceList;
                                         if(list != null)
                                         {
                                             foreach(var pos in list)
@@ -304,8 +310,8 @@ internal sealed unsafe class ImGuiLegacyRenderer : RenderEngine
                                     }
                                     else
                                     {
-                                        var angle = (obj.GetRotationWithOverride(layout, element).RadiansToDegrees() - element.coneAngleMax.Float()).DegreesToRadians();
-                                        var baseAngle = obj.GetRotationWithOverride(layout, element);
+                                        var angle = (rotation.RadiansToDegrees() - element.coneAngleMax.Float()).DegreesToRadians();
+                                        var baseAngle = rotation;
                                         AddConeLine(obj.GetPositionXZY(), baseAngle, angle, element, aradius, 1f, true, layout);
                                     }
 

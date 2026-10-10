@@ -553,6 +553,8 @@ public unsafe class Splatoon : IDalamudPlugin
 
                 //if (CamAngleY > Config.maxcamY) return;
 
+                // Object data is cached only while layouts and elements are processed, no other code runs in between
+                LayoutUtils.BeginTickObjectCache();
                 if(PinnedElementEditWindow.Script != null && PinnedElementEditWindow.EditingElement != null && !PinnedElementEditWindow.Script.InternalData.UnconditionalDraw)
                 {
                     S.RenderManager.GetRenderer(PinnedElementEditWindow.EditingElement).ProcessElement(PinnedElementEditWindow.EditingElement, null, true);
@@ -654,6 +656,7 @@ public unsafe class Splatoon : IDalamudPlugin
                         S.RenderManager.GetRenderer(e).ProcessElement(e);
                     }
                 }
+                LayoutUtils.EndTickObjectCache();
             }
             else
             {
@@ -668,6 +671,10 @@ public unsafe class Splatoon : IDalamudPlugin
         {
             Log("Caught exception: " + e.Message);
             Log(e.ToStringFull());
+        }
+        finally
+        {
+            LayoutUtils.EndTickObjectCache();
         }
     }
 

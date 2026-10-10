@@ -12,7 +12,7 @@ public static class ElementExtensions
         const uint defaultStrokeAlpha = 0xC8;
         var transparencyFromStroke = (float)strokeAlpha / defaultStrokeAlpha;
         var transparencyFromFillStep = 0.5f / e.FillStep;
-        if(e.type.EqualsAny(0, 1))
+        if(e.type is 0 or 1)
         {
             // Donut
             if(e.Donut > 0)
@@ -26,7 +26,7 @@ public static class ElementExtensions
             }
         }
         // Cone
-        if(e.type.EqualsAny(4, 5))
+        if(e.type is 4 or 5)
         {
             transparencyFromFillStep *= 4;
         }
@@ -54,7 +54,7 @@ public static class ElementExtensions
         if(needsPolygonalFillMigration)
         {
             // Non-donut circles are the only shapes that don't need fill migration because they had functioning Fill.
-            var isCircle = e.type.EqualsAny(0, 1) && e.Donut == 0;
+            var isCircle = (e.type is 0 or 1) && e.Donut == 0;
             if(!isCircle)
             {
                 e.Filled = true;
@@ -117,17 +117,17 @@ public static class ElementExtensions
 
     public static float EffectiveLength(this Element e)
     {
-        if(e.type.EqualsAny(0, 1))
+        if(e.type is 0 or 1)
         {
             if(e.Donut > 0)
                 return e.Donut;
             return e.radius;
         }
-        if(e.type.EqualsAny(2, 3))
+        if(e.type is 2 or 3)
         {
             return (new Vector3(e.refX, e.refY, e.refZ) - new Vector3(e.offX, e.offY, e.offZ)).Length();
         }
-        if(e.type.EqualsAny(4, 5))
+        if(e.type is 4 or 5)
         {
             return e.radius;
         }

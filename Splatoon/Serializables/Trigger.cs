@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Text.RegularExpressions;
 
 namespace Splatoon;
 
@@ -33,6 +34,19 @@ public class Trigger
     [NonSerialized] public List<long> DisableAt = [];
     [NonSerialized] internal bool Disabled = false;
     [DefaultValue(false)] public bool IsRegex = false;
+    [NonSerialized] private Regex CachedRegex;
+
+    /// <summary>
+    /// Regex for <paramref name="pattern"/>. Kept per trigger because the static Regex cache only holds 15 patterns.
+    /// </summary>
+    internal Regex GetRegex(string pattern)
+    {
+        if(CachedRegex == null || CachedRegex.ToString() != pattern)
+        {
+            CachedRegex = new Regex(pattern);
+        }
+        return CachedRegex;
+    }
 
     public bool ShouldSerializeMatchIntl()
     {

@@ -442,6 +442,15 @@ public static unsafe class Utils
         return ret;
     }
 
+    /// <summary>
+    /// Same as <see cref="ResolvePronounBPO"/>, but cached while the framework tick is running.
+    /// </summary>
+    internal static GameObject* ResolvePronounBPOCached(string p)
+    {
+        if(!LayoutUtils.IsTickObjectCacheUsable) return ResolvePronounBPO(p);
+        return (GameObject*)LayoutUtils.ResolvePlaceholder(p);
+    }
+
     public static List<IGameObject> AlterTargetIfNeeded(Element element, IGameObject go)
     {
         List<IGameObject> ret = [go];
@@ -457,7 +466,7 @@ public static unsafe class Utils
                         var t = c->Vfx.Tethers[i];
                         if(t.Id != 0)
                         {
-                            var target = Svc.Objects.FirstOrDefault(x => x.GameObjectId == t.TargetId);
+                            var target = LayoutUtils.GetObjects().FirstOrDefault(x => x.GameObjectId == t.TargetId);
                             if(target != null)
                             {
                                 ret.Add(target);
@@ -467,7 +476,7 @@ public static unsafe class Utils
                 }
             }
 
-            foreach(var x in Svc.Objects)
+            foreach(var x in LayoutUtils.GetObjects())
             {
                 if(x is ICharacter chr)
                 {
@@ -488,7 +497,7 @@ public static unsafe class Utils
             ret.Clear();
             if(go is ICharacter chr)
             {
-                var t = chr.TargetObject;
+                var t = LayoutUtils.SearchById(chr.TargetObjectId);
                 if(t != null)
                 {
                     ret.Add(t);
@@ -502,7 +511,8 @@ public static unsafe class Utils
             {
                 var index = (int)element.TargetAlteration - 1100;
                 var i = 0;
-                foreach(var x in Svc.Objects.OfType<IPlayerCharacter>().Where(x => !x.IsDead).OrderBy(o => Vector3.DistanceSquared(o.Position, go.Position)))
+                var goPosition = go.Position;
+                foreach(var x in LayoutUtils.GetObjects().OfType<IPlayerCharacter>().Where(x => !x.IsDead).OrderBy(o => Vector3.DistanceSquared(o.Position, goPosition)))
                 {
                     if(index == i)
                     {
@@ -520,7 +530,8 @@ public static unsafe class Utils
             {
                 var index = (int)element.TargetAlteration - 2100;
                 var i = 0;
-                foreach(var x in Svc.Objects.OfType<IPlayerCharacter>().Where(x => !x.IsDead).OrderByDescending(o => Vector3.DistanceSquared(o.Position, go.Position)))
+                var goPosition = go.Position;
+                foreach(var x in LayoutUtils.GetObjects().OfType<IPlayerCharacter>().Where(x => !x.IsDead).OrderByDescending(o => Vector3.DistanceSquared(o.Position, goPosition)))
                 {
                     if(index == i)
                     {
@@ -543,7 +554,7 @@ public static unsafe class Utils
     /// <returns></returns>
     public static List<Vector3> GetFacePositions(Layout layout, IGameObject go, string placeholder)
     {
-        if(placeholder.StartsWith("<element:"))
+        if(placeholder.StartsWith("<element:", StringComparison.Ordinal))
         {
             var details = placeholder[1..^1].Split(":");
             var list = details.Length == 2
@@ -551,12 +562,12 @@ public static unsafe class Utils
                 : Splatoon.CapturedPositions.SafeSelect(details[1])?.SafeSelect(details[2]);
             return list ?? [];
         }
-        if(placeholder.StartsWith("<objectid:"))
+        if(placeholder.StartsWith("<objectid:", StringComparison.Ordinal))
         {
             var details = placeholder[1..^1].Split(":");
-            if(uint.TryParse(details[1], details[1].StartsWith("0x") ? NumberStyles.HexNumber : default, null, out var result))
+            if(uint.TryParse(details[1], details[1].StartsWith("0x", StringComparison.Ordinal) ? NumberStyles.HexNumber : default, null, out var result))
             {
-                return Svc.Objects.Where(x => x.ObjectId == result).Select(x => x.Position).ToList();
+                return LayoutUtils.GetObjects().Where(x => x.ObjectId == result).Select(x => x.Position).ToList();
             }
         }
         if(placeholder == "<tethered>")
@@ -571,7 +582,7 @@ public static unsafe class Utils
                         var t = c->Vfx.Tethers[i];
                         if(t.Id != 0)
                         {
-                            var target = Svc.Objects.FirstOrDefault(x => x.GameObjectId == t.TargetId);
+                            var target = LayoutUtils.GetObjects().FirstOrDefault(x => x.GameObjectId == t.TargetId);
                             if(target != null)
                             {
                                 ret.Add(target.Position);
@@ -581,7 +592,7 @@ public static unsafe class Utils
                 }
             }
 
-            foreach(var x in Svc.Objects)
+            foreach(var x in LayoutUtils.GetObjects())
             {
                 if(x is ICharacter chr)
                 {
@@ -598,7 +609,7 @@ public static unsafe class Utils
             }
             return ret;
         }
-        var obj = Utils.ResolvePronounBPO(placeholder);
+        var obj = Utils.ResolvePronounBPOCached(placeholder);
         if(obj != null)
         {
             return [obj->Position];

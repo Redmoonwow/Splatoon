@@ -48,6 +48,20 @@ public class Element
     public string Name = "";
     public InternationalString InternationalName = new();
     [NonSerialized] internal Guid GUID = Guid.NewGuid();
+    [NonSerialized] private Guid GUIDStringSource;
+    [NonSerialized] private string GUIDString;
+    /// <summary>
+    /// <see cref="GUID"/> as a string. Cached because display object IDs are built from it on every frame.
+    /// </summary>
+    internal string GetGUIDString()
+    {
+        if(GUIDString == null || GUIDStringSource != GUID)
+        {
+            GUIDStringSource = GUID;
+            GUIDString = GUID.ToString();
+        }
+        return GUIDString;
+    }
     /// <summary>
     /// 0: Object at fixed coordinates |
     /// 1: Object relative to actor position | 

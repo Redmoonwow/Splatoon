@@ -7,7 +7,6 @@ namespace Splatoon.RenderEngines.ImGuiLegacy;
 internal class ImGuiLegacyScene : IDisposable
 {
     internal readonly ImGuiLegacyRenderer ImGuiLegacyRenderer;
-    private int uid = 0;
 
     internal double CamAngleX;
     internal float CamAngleY;
@@ -39,7 +38,6 @@ internal class ImGuiLegacyScene : IDisposable
     private void Draw()
     {
         if(ImGuiLegacyRenderer.DisplayObjects.Count == 0) return;
-        uid = 0;
         try
         {
             if(!Svc.Condition[ConditionFlag.OccupiedInCutSceneEvent]
@@ -57,7 +55,7 @@ internal class ImGuiLegacyScene : IDisposable
                 }
                 try
                 {
-                    void Draw()
+                    void DrawShapes()
                     {
                         foreach(var element in ImGuiLegacyRenderer.DisplayObjects)
                         {
@@ -68,10 +66,6 @@ internal class ImGuiLegacyScene : IDisposable
                             else if(element is DisplayObjectDot elementDot)
                             {
                                 DrawPoint(elementDot);
-                            }
-                            else if(element is DisplayObjectText elementText)
-                            {
-                                DrawTextWorld(elementText);
                             }
                             else if(element is DisplayObjectLine elementLine)
                             {
@@ -92,6 +86,17 @@ internal class ImGuiLegacyScene : IDisposable
                         }
                     }
 
+                    void DrawTexts()
+                    {
+                        foreach(var element in ImGuiLegacyRenderer.DisplayObjects)
+                        {
+                            if(element is DisplayObjectText elementText)
+                            {
+                                DrawTextWorld(elementText);
+                            }
+                        }
+                    }
+
                     ImGuiHelpers.ForceNextWindowMainViewport();
                     ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
                     ImGuiHelpers.SetNextWindowPosRelativeMainViewport(Vector2.Zero);
@@ -103,18 +108,26 @@ internal class ImGuiLegacyScene : IDisposable
                     }
                     if(P.Config.RenderableZones.Count == 0 || !P.Config.RenderableZonesValid)
                     {
-                        Draw();
+                        DrawShapes();
+                        DrawTexts();
                     }
                     else
                     {
+                        // Texts go on top of the shapes of every zone
                         foreach(var e in P.Config.RenderableZones)
                         {
                             //var trans = e.Trans != 1.0f;
                             //if (trans) ImGui.PushStyleVar(ImGuiStyleVar.Alpha, e.Trans);
                             ImGui.PushClipRect(new Vector2(e.Rect.X, e.Rect.Y), new Vector2(e.Rect.Right, e.Rect.Bottom), false);
-                            Draw();
+                            DrawShapes();
                             ImGui.PopClipRect();
                             //if(trans)ImGui.PopStyleVar();
+                        }
+                        foreach(var e in P.Config.RenderableZones)
+                        {
+                            ImGui.PushClipRect(new Vector2(e.Rect.X, e.Rect.Y), new Vector2(e.Rect.Right, e.Rect.Bottom), false);
+                            DrawTexts();
+                            ImGui.PopClipRect();
                         }
                     }
                     ImGui.End();
@@ -142,6 +155,9 @@ internal class ImGuiLegacyScene : IDisposable
         return new Vector3(temp.X, temp.Y, (float)z);
     }
 
+    private static readonly double[] DonutSin = Enumerable.Range(0, 49).Select(k => Math.Sin(Math.PI / 24.0 * k)).ToArray();
+    private static readonly double[] DonutCos = Enumerable.Range(0, 49).Select(k => Math.Cos(Math.PI / 24.0 * k)).ToArray();
+
     private void DrawDonutWorld(DisplayObjectDonut elementDonut)
     {
         Vector3 v1, v2, v3, v4;
@@ -156,26 +172,26 @@ internal class ImGuiLegacyScene : IDisposable
             elementDonut.z,
             elementDonut.y + (outerradiuschonk * Math.Cos(Math.PI / 24.0 * 0))
         );
+        var drawList = ImGui.GetWindowDrawList();
+        var fillColor = Utils.TransformAlpha(elementDonut.color, elementDonut.intensity);
         for(var i = 0; i <= 47; i++)
         {
             v2 = TranslateToScreen(
-                elementDonut.x + (elementDonut.radius * Math.Sin(Math.PI / 24.0 * (i + 1))),
+                elementDonut.x + (elementDonut.radius * DonutSin[i + 1]),
                 elementDonut.z,
-                elementDonut.y + (elementDonut.radius * Math.Cos(Math.PI / 24.0 * (i + 1)))
+                elementDonut.y + (elementDonut.radius * DonutCos[i + 1])
             );
             v3 = TranslateToScreen(
-                elementDonut.x + (outerradiuschonk * Math.Sin(Math.PI / 24.0 * (i + 1))),
+                elementDonut.x + (outerradiuschonk * DonutSin[i + 1]),
                 elementDonut.z,
-                elementDonut.y + (outerradiuschonk * Math.Cos(Math.PI / 24.0 * (i + 1)))
+                elementDonut.y + (outerradiuschonk * DonutCos[i + 1])
             );
-            ImGui.GetWindowDrawList().PathLineTo(new Vector2(v1.X, v1.Y));
-            ImGui.GetWindowDrawList().PathLineTo(new Vector2(v2.X, v2.Y));
-            ImGui.GetWindowDrawList().PathLineTo(new Vector2(v3.X, v3.Y));
-            ImGui.GetWindowDrawList().PathLineTo(new Vector2(v4.X, v4.Y));
-            ImGui.GetWindowDrawList().PathLineTo(new Vector2(v1.X, v1.Y));
-            ImGui.GetWindowDrawList().PathFillConvex(
-                Utils.TransformAlpha(elementDonut.color, elementDonut.intensity)
-            );
+            drawList.PathLineTo(new Vector2(v1.X, v1.Y));
+            drawList.PathLineTo(new Vector2(v2.X, v2.Y));
+            drawList.PathLineTo(new Vector2(v3.X, v3.Y));
+            drawList.PathLineTo(new Vector2(v4.X, v4.Y));
+            drawList.PathLineTo(new Vector2(v1.X, v1.Y));
+            drawList.PathFillConvex(fillColor);
             v1 = v2;
             v4 = v3;
         }
@@ -291,63 +307,68 @@ internal class ImGuiLegacyScene : IDisposable
 
     public void DrawText(DisplayObjectText e, Vector2 pos)
     {
-        var scaled = e.fscale != 1f;
-        var size = scaled ? ImGui.CalcTextSize(e.text) * e.fscale : ImGui.CalcTextSize(e.text);
-        size = new Vector2(size.X + 10f, size.Y + 10f);
-        ImGui.SetNextWindowPos(new Vector2(pos.X - (size.X / 2), pos.Y - (size.Y / 2)));
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(5, 5));
-        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 10f);
-        ImGui.PushStyleColor(ImGuiCol.ChildBg, ImGui.ColorConvertU32ToFloat4(e.bgcolor));
-        ImGui.BeginChild("##child" + e.text + ++uid, size, false,
-            ImGuiWindowFlags.NoInputs | ImGuiWindowFlags.NoNav
-            | ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.AlwaysUseWindowPadding
-            | ImGuiWindowFlags.NoFocusOnAppearing);
-        ImGui.PushStyleColor(ImGuiCol.Text, e.fgcolor);
-        if(scaled) ImGui.SetWindowFontScale(e.fscale);
-        ImGuiEx.Text(e.text);
-        if(scaled) ImGui.SetWindowFontScale(1f);
-        ImGui.PopStyleColor();
-        ImGui.EndChild();
-        ImGui.PopStyleColor();
-        ImGui.PopStyleVar(2);
+        CommonRenderUtils.DrawOverlayText(pos, e.text, e.bgcolor, e.fgcolor, e.fscale);
+    }
+
+    // Sin/cos of every circle segment and the point buffer, rebuilt only when the segment count changes.
+    private int RingSegments = -1;
+    private float[] RingSin = [];
+    private float[] RingCos = [];
+    private Vector2?[] RingPoints = [];
+
+    private void UpdateRingTables()
+    {
+        var segments = P.Config.segments;
+        if(segments == RingSegments) return;
+        var seg = segments / 2;
+        RingSin = new float[segments];
+        RingCos = new float[segments];
+        RingPoints = new Vector2?[segments];
+        for(var i = 0; i < segments; i++)
+        {
+            RingSin[i] = (float)Math.Sin(Math.PI / seg * i);
+            RingCos[i] = (float)Math.Cos(Math.PI / seg * i);
+        }
+        RingSegments = segments;
     }
 
     public void DrawRingWorld(DisplayObjectCircle e)
     {
-        var seg = P.Config.segments / 2;
+        UpdateRingTables();
         Utils.WorldToScreen(new Vector3(
             e.x + (e.radius * (float)Math.Sin(CamAngleX)),
             e.z,
             e.y + (e.radius * (float)Math.Cos(CamAngleX))
             ), out var refpos);
         var visible = false;
-        var elements = new Vector2?[P.Config.segments];
-        for(var i = 0; i < P.Config.segments; i++)
+        var elements = RingPoints;
+        for(var i = 0; i < elements.Length; i++)
         {
             visible = Utils.WorldToScreen(
-                new Vector3(e.x + (e.radius * (float)Math.Sin(Math.PI / seg * i)),
+                new Vector3(e.x + (e.radius * RingSin[i]),
                 e.z,
-                e.y + (e.radius * (float)Math.Cos(Math.PI / seg * i))
+                e.y + (e.radius * RingCos[i])
                 ),
                 out var pos)
                 || visible;
-            if(pos.Y > refpos.Y || P.Config.NoCircleFix) elements[i] = new Vector2(pos.X, pos.Y);
+            elements[i] = pos.Y > refpos.Y || P.Config.NoCircleFix ? new Vector2(pos.X, pos.Y) : null;
         }
         if(visible)
         {
+            var drawList = ImGui.GetWindowDrawList();
             foreach(var pos in elements)
             {
                 if(pos == null) continue;
-                ImGui.GetWindowDrawList().PathLineTo(pos.Value);
+                drawList.PathLineTo(pos.Value);
             }
 
             if(e.filled)
             {
-                ImGui.GetWindowDrawList().PathFillConvex(e.color);
+                drawList.PathFillConvex(e.color);
             }
             else
             {
-                ImGui.GetWindowDrawList().PathStroke(e.color, ImDrawFlags.Closed, e.thickness);
+                drawList.PathStroke(e.color, ImDrawFlags.Closed, e.thickness);
             }
         }
     }
